@@ -1,0 +1,24 @@
+# Нормализация переводов строк.
+#
+# Критично для деплоя: если install-fpc.sh или *.service попадут на Linux
+# с CRLF, bash упадёт с "bad interpreter: /bin/bash^M", а systemd не прочитает
+# юнит. Загрузчик конфигов проекта тоже требует LF (см. Utils/config_loader.py).
+
+* text=auto eol=lf
+
+*.sh      text eol=lf
+*.service text eol=lf
+*.cfg     text eol=lf
+*.py      text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+Dockerfile text eol=lf
+
+# Windows-скрипты должны остаться с CRLF.
+*.bat text eol=crlf
+
+# Бинарные файлы не трогать.
+*.ico binary
+*.png binary
+*.jpg binary
+*.zip binary

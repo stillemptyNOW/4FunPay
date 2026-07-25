@@ -1,0 +1,27 @@
+# Секреты и данные пользователя монтируются томами, в образ не попадают.
+configs/
+storage/
+logs/
+plugins/
+.env
+.env.*
+backup.zip
+*.zip
+
+.git/
+.gitignore
+.gitattributes
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.venv-check/
+.idea/
+.vscode/
+
+tests/
+*.md
+Setup.bat
+Start.bat
+install.sh
+*.service

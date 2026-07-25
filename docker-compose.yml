@@ -1,0 +1,56 @@
+# 4FunPay - альтернатива systemd-развёртыванию.
+#
+# Первый запуск (интерактивно, чтобы пройти мастер настройки):
+#   docker compose run --rm 4funpay python main.py
+#
+# Затем в фоне:
+#   docker compose up -d
+#   docker compose logs -f
+
+services:
+  4funpay:
+    build: .
+    image: 4funpay:latest
+    container_name: 4funpay
+
+    # on-failure, а не always: штатный выход после первичной настройки
+    # (код 0) не должен приводить к бесконечному перезапуску.
+    restart: on-failure:5
+
+    # Каталоги с данными живут на хосте: пересборка образа их не затирает.
+    volumes:
+      - ./configs:/app/configs
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+      - ./plugins:/app/plugins
+
+    # Секреты можно передать через окружение вместо файла конфига.
+    # Значения из окружения имеют приоритет над configs/_main.cfg.
+    # Файл .env в git не попадает (см. .gitignore).
+    env_file:
+      - path: .env
+        required: false
+
+    environment:
+      TZ: ${TZ:-Europe/Kyiv}
+
+    # Интерактивный ввод для мастера первичной настройки.
+    stdin_open: true
+    tty: true
+
+    # Логи не должны съесть диск на VPS.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    # Боту не нужны никакие дополнительные привилегии.
+    security_opt:
+      - no-new-privileges:true
+
+    # Ограничения ресурсов: бот укладывается в ~150 МБ, лимит ловит утечки.
+    deploy:
+      resources:
+        limits:
+          memory: 512M

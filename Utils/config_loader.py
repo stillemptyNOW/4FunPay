@@ -214,9 +214,13 @@ def load_main_config(config_path: str):
                 config.set(section_name, "locale", "ru")
                 with open("configs/_main.cfg", "w", encoding="utf-8") as f:
                     config.write(f)
+            # Миграция с исходного проекта: убираем его бренд из водяного знака,
+            # который подставляется в сообщения покупателям.
             elif section_name == "Other" and param_name == "watermark" and \
-                    param_name in config[section_name] and "𝑪𝒂𝒓𝒅𝒊𝒏𝒂𝒍" in config[section_name][param_name]:
-                config.set(section_name, param_name, "🐦")
+                    param_name in config[section_name] and \
+                    any(marker in config[section_name][param_name].lower()
+                        for marker in ("cardinal", "𝑪𝒂𝒓𝒅𝒊𝒏𝒂𝒍", "𝓒𝓪𝓻𝓭𝓲𝓷𝓪𝓵", "ᴄᴀʀᴅɪɴᴀʟ")):
+                config.set(section_name, param_name, "🤖")
                 with open("configs/_main.cfg", "w", encoding="utf-8") as f:
                     config.write(f)
             elif section_name == "Greetings" and param_name == "onlyNewChats" and param_name not in config[

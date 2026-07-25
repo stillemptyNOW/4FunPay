@@ -1,0 +1,63 @@
+[Unit]
+Description=4FunPay bot (пользователь %I)
+Documentation=file:///home/%i/4funpay/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/4funpay
+ExecStart=/home/%i/pyvenv/bin/python -u /home/%i/4funpay/main.py
+
+# Перезапуск только при аварийном завершении. Штатный выход с кодом 0
+# (например, после первичной настройки) сервис не поднимает повторно.
+Restart=on-failure
+RestartSec=15s
+# Если процесс падает чаще 5 раз за 5 минут - перестаём его дёргать,
+# иначе бесконечный цикл рестартов маскирует настоящую причину в логах.
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+# Логи идут в journald: journalctl -u 4funpay@%i -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=4funpay-%i
+
+Environment="LANG=en_US.utf8"
+Environment="PYTHONUNBUFFERED=1"
+Environment="FOURFP_RUNNING_AS_SERVICE=1"
+
+# PID-файл, который пишет сам процесс (см. main.py).
+ExecStartPre=+/usr/bin/install -m 755 -o root -g root -d /run/4funpay
+ExecStartPre=+/usr/bin/install -m 755 -o %i -g root -d /run/4funpay/%i
+PIDFile=/run/4funpay/%i/4funpay.pid
+
+# --- Ограничение прав процесса ---------------------------------------------
+# Бот хранит golden_key и токен Telegram, поэтому ему запрещено всё,
+# что не нужно для работы. Если на твоём ядре какая-то опция не поддерживается,
+# убирай их по одной, чтобы понять, какая именно мешает.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateMounts=yes
+ProtectHostname=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+DevicePolicy=closed
+
+# Запрещаем запись везде, кроме рабочего каталога, venv и /run.
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/%i/4funpay /home/%i/pyvenv -/run/4funpay
+
+# Файлы, которые создаёт бот (configs, storage, logs, backup.zip),
+# не должны быть читаемы другими пользователями системы.
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
