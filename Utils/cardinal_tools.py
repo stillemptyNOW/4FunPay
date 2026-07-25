@@ -19,6 +19,7 @@ import json
 import sys
 import os
 import re
+import threading
 import time
 import logging
 
@@ -349,55 +350,92 @@ def get_month_name(month_number: int) -> str:
     return months[month_number - 1]
 
 
+_PRODUCTS_LOCKS: dict[str, threading.Lock] = {}
+"""Блокировки на товарные файлы: {нормализованный путь: блокировка}."""
+
+_PRODUCTS_LOCKS_GUARD = threading.Lock()
+"""Защищает сам словарь блокировок от одновременного создания записи."""
+
+
+def _products_lock(path: str) -> threading.Lock:
+    """
+    Возвращает блокировку для товарного файла, создавая её при первом обращении.
+
+    :param path: путь до товарного файла.
+
+    :return: объект блокировки, общий для всех обращений к этому файлу.
+    """
+    key = os.path.normcase(os.path.abspath(path))
+    with _PRODUCTS_LOCKS_GUARD:
+        if key not in _PRODUCTS_LOCKS:
+            _PRODUCTS_LOCKS[key] = threading.Lock()
+        return _PRODUCTS_LOCKS[key]
+
+
 def get_products(path: str, amount: int = 1) -> list[list[str] | int] | None:
     """
-    Берет из товарного файла товар/-ы, удаляет их из товарного файла.
+    Забирает товар/-ы из товарного файла и удаляет их оттуда.
+
+    Операция «прочитать - отдать - перезаписать» выполняется под блокировкой на
+    файл. Без неё два одновременных обращения могли прочитать одни и те же
+    строки до того, как любое из них перезапишет файл, и один ключ ушёл бы двум
+    покупателям. Основной цикл событий однопоточный, но выдачу могут дёргать
+    и из потока Telegram-бота (ручная выдача, тест лота), и из плагинов.
 
     :param path: путь до файла с товарами.
     :param amount: кол-во товара.
 
-    :return: [[Товар/-ы], оставшееся кол-во товара]
+    :return: ``[[товар, ...], осталось товаров]``
+
+    :raises NoProductsError: файл пуст.
+    :raises NotEnoughProductsError: товаров меньше, чем запрошено.
     """
-    with open(path, "r", encoding="utf-8") as f:
-        products = f.read()
+    with _products_lock(path):
+        with open(path, "r", encoding="utf-8") as f:
+            products = f.read()
 
-    products = products.split("\n")
+        products = products.split("\n")
 
-    # Убираем пустые элементы
-    products = list(itertools.filterfalse(lambda el: not el, products))
+        # Убираем пустые элементы
+        products = list(itertools.filterfalse(lambda el: not el, products))
 
-    if not products:
-        raise Utils.exceptions.NoProductsError(path)
+        if not products:
+            raise Utils.exceptions.NoProductsError(path)
 
-    elif len(products) < amount:
-        raise Utils.exceptions.NotEnoughProductsError(path, len(products), amount)
+        elif len(products) < amount:
+            raise Utils.exceptions.NotEnoughProductsError(path, len(products), amount)
 
-    got_products = products[:amount]
-    save_products = products[amount:]
-    amount = len(save_products)
+        got_products = products[:amount]
+        save_products = products[amount:]
+        amount = len(save_products)
 
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(save_products))
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(save_products))
 
-    return [got_products, amount]
+        return [got_products, amount]
 
 
 def add_products(path: str, products: list[str], at_zero_position=False):
     """
     Добавляет товары в файл с товарами.
 
+    Под той же блокировкой, что и :func:`get_products`: этой функцией
+    возвращаются товары после неудачной отправки сообщения, и такой возврат
+    не должен пересекаться с одновременным изъятием товаров из файла.
+
     :param path: путь до файла с товарами.
     :param products: товары.
     :param at_zero_position: добавить товары в начало товарного файла.
     """
-    if not at_zero_position:
-        with open(path, "a", encoding="utf-8") as f:
-            f.write("\n" + "\n".join(products))
-    else:
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("\n".join(products) + "\n" + text)
+    with _products_lock(path):
+        if not at_zero_position:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write("\n" + "\n".join(products))
+        else:
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(products) + "\n" + text)
 
 
 def safe_text(text: str):

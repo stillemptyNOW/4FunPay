@@ -1,0 +1,14 @@
+# Зависимости для разработки и тестов.
+#
+# Установка:
+#   pip install -U -r requirements.txt -r requirements-dev.txt
+#
+# Запуск тестов из корня проекта:
+#   pytest
+#
+# Тесты не обращаются к funpay.com и к api.telegram.org: аккаунт подменяется
+# двойником FakeAccount из tests/conftest.py.
+
+-r requirements.txt
+
+pytest>=8.0.0
