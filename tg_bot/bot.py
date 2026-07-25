@@ -26,8 +26,9 @@ import logging
 from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, Message, CallbackQuery, BotCommand, \
     InputFile
 from tg_bot import utils, static_keyboards as skb, keyboards as kb, CBT
-from Utils import cardinal_tools, updater
+from Utils import cardinal_tools, backup
 from locales.localizer import Localizer
+import branding
 
 logger = logging.getLogger("TGBot")
 localizer = Localizer()
@@ -75,7 +76,6 @@ class TGBot:
             "menu": "cmd_menu",
             "profile": "cmd_profile",
             "restart": "cmd_restart",
-            "check_updates": "cmd_check_updates",
             "update": "cmd_update",
             "golden_key": "cmd_golden_key",
             "ban": "cmd_ban",
@@ -95,9 +95,9 @@ class TGBot:
             "power_off": "cmd_power_off",
             "watermark": "cmd_watermark",
         }
-        self.__default_notification_settings = {
-            utils.NotificationTypes.ad: 1,
-            utils.NotificationTypes.announcement: 1
+        # Уведомления, включённые для чата сразу после авторизации.
+        self.__default_notification_settings: dict[str, int] = {
+            utils.NotificationTypes.critical: 1,
         }
 
     # User states
@@ -304,14 +304,13 @@ class TGBot:
                 self.notification_settings[str(m.chat.id)][NotificationTypes.critical] = 1
                 utils.save_notification_settings(self.notification_settings)
             text = _("access_granted", language=lang)
-            kb_links = None
             logger.warning(_("log_access_granted", m.from_user.username, m.from_user.id))
         else:
             self.attempts[m.from_user.id] = self.attempts.get(m.from_user.id, 0) + 1
             text = _("access_denied", m.from_user.username, language=lang)
-            kb_links = kb.links(language=lang)
             logger.warning(_("log_access_attempt", m.from_user.username, m.from_user.id))
-        self.bot.send_message(m.chat.id, text, reply_markup=kb_links)
+        # Посторонним не показываем никаких кнопок и ссылок - бот приватный.
+        self.bot.send_message(m.chat.id, text)
 
     def ignore_unauthorized_users(self, c: CallbackQuery):
         """
@@ -321,7 +320,8 @@ class TGBot:
                          c.message.chat.id))
         self.attempts[c.from_user.id] = self.attempts.get(c.from_user.id, 0) + 1
         if self.attempts[c.from_user.id] <= 5:
-            self.bot.answer_callback_query(c.id, _("adv_fpc", language=c.from_user.language_code), show_alert=True)
+            self.bot.answer_callback_query(c.id, _("access_denied_short", language=c.from_user.language_code),
+                                           show_alert=True)
         return
 
     # Команды
@@ -552,80 +552,47 @@ class TGBot:
 
     def about(self, m: Message):
         """
-        Отправляет информацию о текущей версии бота.
+        Отправляет информацию о текущей версии бота и ссылки на ресурсы проекта.
         """
-        self.bot.send_message(m.chat.id, _("about", self.cardinal.VERSION))
+        self.bot.send_message(m.chat.id, _("about", self.cardinal.VERSION),
+                              reply_markup=kb.support_links())
 
-    def check_updates(self, m: Message):
-        curr_tag = f"v{self.cardinal.VERSION}"
-        releases = updater.get_new_releases(curr_tag)
-        if isinstance(releases, int):
-            errors = {
-                1: ["update_no_tags", ()],
-                2: ["update_lasted", (curr_tag,)],
-                3: ["update_get_error", ()],
-            }
-            self.bot.send_message(m.chat.id, _(errors[releases][0], *errors[releases][1]))
-            return
-        for release in releases:
-            self.bot.send_message(m.chat.id, _("update_available", release.name, release.description))
-            time.sleep(1)
-        self.bot.send_message(m.chat.id, _("update_update"))
+    def send_update_help(self, m: Message):
+        """
+        Объясняет, как обновиться. Самообновление из интернета убрано намеренно:
+        код обновляется через git из своего репозитория.
+        """
+        self.bot.send_message(m.chat.id, _("update_manual_help", self.cardinal.VERSION))
 
     def get_backup(self, m: Message):
-        logger.info(
-            f"[IMPORTANT] Получаю бэкап по запросу пользователя $MAGENTA@{m.from_user.username} (id: {m.from_user.id})$RESET.")
-        if os.path.exists("backup.zip"):  # locale
-            with open(file_path := "backup.zip", 'rb') as file:
-                modification_time = os.path.getmtime(file_path)
-                formatted_time = time.strftime('%d.%m.%Y %H:%M:%S', time.localtime(modification_time))
-                try:
-                    self.bot.send_document(chat_id=m.chat.id, document=InputFile(file),
-                                           caption=f'{_("update_backup")}\n\n{formatted_time}')
-                except:
-                    logger.warning("Не удалось отправить бэкап")
-                    logger.debug("TRACEBACK", exc_info=True)
-                    self.bot.send_message(m.chat.id, _("update_backup_send_error"))
+        logger.info(f"[IMPORTANT] Отдаю бэкап по запросу пользователя "
+                    f"$MAGENTA@{m.from_user.username} (id: {m.from_user.id})$RESET.")
+        if not os.path.exists(backup.BACKUP_ARCHIVE):
+            self.bot.send_message(m.chat.id, _("backup_not_found"))
+            return
 
-        else:
-            self.bot.send_message(m.chat.id, _("update_backup_not_found"))
+        modification_time = os.path.getmtime(backup.BACKUP_ARCHIVE)
+        formatted_time = time.strftime("%d.%m.%Y %H:%M:%S", time.localtime(modification_time))
+        with open(backup.BACKUP_ARCHIVE, "rb") as file:
+            try:
+                self.bot.send_document(chat_id=m.chat.id, document=InputFile(file),
+                                       caption=f'{_("backup_ready")}\n\n{formatted_time}')
+            except Exception:
+                logger.warning("Не удалось отправить бэкап.")
+                logger.debug("TRACEBACK", exc_info=True)
+                self.bot.send_message(m.chat.id, _("backup_send_error"))
 
-    def create_backup(self, m: Message):
-        if updater.create_backup():
-            self.bot.send_message(m.chat.id, _("update_backup_error"))
+    def create_backup(self, m: Message) -> bool:
+        """
+        Создаёт резервную копию конфигов, хранилища и плагинов и отправляет её в чат.
+
+        :return: True, если бэкап создан.
+        """
+        if backup.create_backup():
+            self.bot.send_message(m.chat.id, _("backup_error"))
             return False
         self.get_backup(m)
         return True
-
-    def update(self, m: Message):
-        curr_tag = f"v{self.cardinal.VERSION}"
-        releases = updater.get_new_releases(curr_tag)
-        if isinstance(releases, int):
-            errors = {
-                1: ["update_no_tags", ()],
-                2: ["update_lasted", (curr_tag,)],
-                3: ["update_get_error", ()],
-            }
-            self.bot.send_message(m.chat.id, _(errors[releases][0], *errors[releases][1]))
-            return
-
-        if not self.create_backup(m):
-            return
-        release = releases[-1]
-        if updater.download_zip(release.sources_link) \
-                or (release_folder := updater.extract_update_archive()) == 1:
-            self.bot.send_message(m.chat.id, _("update_download_error"))
-            return
-        self.bot.send_message(m.chat.id, _("update_downloaded").format(release.name, str(len(releases) - 1)))
-
-        if updater.install_release(release_folder):
-            self.bot.send_message(m.chat.id, _("update_install_error"))
-            return
-
-        if getattr(sys, 'frozen', False):
-            self.bot.send_message(m.chat.id, _("update_done_exe"))
-        else:
-            self.bot.send_message(m.chat.id, _("update_done"))
 
     def send_system_info(self, m: Message):
         """
@@ -651,7 +618,7 @@ class TGBot:
 
     def ask_power_off(self, m: Message):
         """
-        Просит подтверждение на отключение FPC.
+        Просит подтверждение на отключение бота.
         """
         self.bot.send_message(m.chat.id, _("power_off_0"), reply_markup=kb.power_off(self.cardinal.instance_id, 0))
 
@@ -664,7 +631,7 @@ class TGBot:
 
     def power_off(self, c: CallbackQuery):
         """
-        Отключает FPC.
+        Отключает бота.
         """
         split = c.data.split(":")
         state = int(split[1])
@@ -847,7 +814,8 @@ class TGBot:
                     last_by_vertex == i.by_vertex:
                 author = ""
             elif i.author_id == self.cardinal.account.id:
-                author = f"<i><b>🤖 {_('you')} (<i>FPC</i>):</b></i> " if i.by_bot else f"<i><b>🫵 {_('you')}:</b></i> "
+                author = (f"<i><b>🤖 {_('you')} (<i>{branding.BOT_SHORT_NAME}</i>):</b></i> " if i.by_bot
+                          else f"<i><b>🫵 {_('you')}:</b></i> ")
                 if i.is_autoreply:
                     author = f"<i><b>📦 {_('you')} ({i.badge}):</b></i> "
             elif i.author_id == 0:
@@ -961,7 +929,7 @@ class TGBot:
 
     def switch_param(self, c: CallbackQuery):
         """
-        Переключает переключаемые настройки FPC.
+        Переключает глобальные переключатели бота.
         """
         split = c.data.split(":")
         section, option = split[1], split[2]
@@ -996,11 +964,8 @@ class TGBot:
         result = self.toggle_notification(chat_id, notification_type)
         logger.info(_("log_notification_switched", c.from_user.username, c.from_user.id,
                       notification_type, c.message.chat.id, result))
-        keyboard = kb.announcements_settings if notification_type in [utils.NotificationTypes.announcement,
-                                                                      utils.NotificationTypes.ad] \
-            else kb.notifications_settings
         self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
-                                           reply_markup=keyboard(self.cardinal, c.message.chat.id))
+                                           reply_markup=kb.notifications_settings(self.cardinal, c.message.chat.id))
         self.bot.answer_callback_query(c.id)
 
     def open_settings_section(self, c: CallbackQuery):
@@ -1043,12 +1008,6 @@ class TGBot:
         """
         self.bot.answer_callback_query(c.id, _("param_disabled"), show_alert=True)
 
-    def send_announcements_kb(self, m: Message):
-        """
-        Отправляет сообщение с клавиатурой управления уведомлениями о новых объявлениях.
-        """
-        self.bot.send_message(m.chat.id, _("desc_an"), reply_markup=kb.announcements_settings(self.cardinal, m.chat.id))
-
     def send_review_reply_text(self, c: CallbackQuery):
         stars = int(c.data.split(":")[1])
         text = self.cardinal.MAIN_CFG["ReviewReply"][f"star{stars}ReplyText"]
@@ -1068,23 +1027,18 @@ class TGBot:
         self.bot.send_message(c.message.chat.id, _("old_mode_help"))
 
     def empty_callback(self, c: CallbackQuery):
-        self.bot.answer_callback_query(c.id, "🤑 @sidor_donate 🤑")
+        """Заглушка для кнопок-заголовков, которые не должны ничего делать."""
+        self.bot.answer_callback_query(c.id)
 
     def switch_lang(self, c: CallbackQuery):
         lang = c.data.split(":")[1]
         Localizer(lang)
         self.cardinal.MAIN_CFG["Other"]["language"] = lang
         self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
-        if localizer.current_language == "en":
-            self.bot.answer_callback_query(c.id, "The translation may be incomplete and contain errors.\n\n"
-                                                 "If you find errors in the translation, let @sidor0912 know.\n\n"
-                                                 "Thank you :)", show_alert=True)
-        elif localizer.current_language == "uk":
-            self.bot.answer_callback_query(c.id, "Переклад складено за допомогою ChatGPT.\n"
-                                                 "Повідомте @sidor0912, якщо знайдете помилки.", show_alert=True)
-        elif localizer.current_language == "ru":
-            self.bot.answer_callback_query(c.id, '«А я сейчас вам покажу, откуда на Беларусь готовилось нападение»',
-                                           show_alert=True)
+        if localizer.current_language != "ru":
+            self.bot.answer_callback_query(c.id, _("lang_switched_notice"), show_alert=True)
+        else:
+            self.bot.answer_callback_query(c.id)
         c.data = f"{CBT.CATEGORY}:lang"
         self.open_settings_section(c)
 
@@ -1134,14 +1088,12 @@ class TGBot:
         self.msg_handler(self.send_logs, commands=["logs"])
         self.msg_handler(self.del_logs, commands=["del_logs"])
         self.msg_handler(self.about, commands=["about"])
-        self.msg_handler(self.check_updates, commands=["check_updates"])
-        self.msg_handler(self.update, commands=["update"])
+        self.msg_handler(self.send_update_help, commands=["update"])
         self.msg_handler(self.get_backup, commands=["get_backup"])
         self.msg_handler(self.create_backup, commands=["create_backup"])
         self.msg_handler(self.send_system_info, commands=["sys"])
         self.msg_handler(self.restart_cardinal, commands=["restart"])
         self.msg_handler(self.ask_power_off, commands=["power_off"])
-        self.msg_handler(self.send_announcements_kb, commands=["announcements"])
         self.cbq_handler(self.send_review_reply_text, lambda c: c.data.startswith(f"{CBT.SEND_REVIEW_REPLY_TEXT}:"))
 
         self.cbq_handler(self.act_send_funpay_message, lambda c: c.data.startswith(f"{CBT.SEND_FP_MESSAGE}:"))
@@ -1182,8 +1134,7 @@ class TGBot:
             kwargs["reply_markup"] = keyboard
         to_delete = []
         for chat_id in self.notification_settings:
-            if notification_type != utils.NotificationTypes.important_announcement and \
-                    not self.is_notification_enabled(chat_id, notification_type):
+            if not self.is_notification_enabled(chat_id, notification_type):
                 continue
 
             try:
@@ -1231,32 +1182,15 @@ class TGBot:
 
     def edit_bot(self):
         """
-        Изменяет описания и название бота.
-        """
+        Ничего не делает. Оставлено для совместимости с вызовом из ядра и плагинами.
 
-        name = self.bot.get_me().full_name
-        limit = 64
-        add_to_name = ["FunPay Bot | Бот ФанПей", "FunPay Bot", "FunPayBot", "FunPay"]
-        new_name = name
-        if "vertex" in new_name.lower():
-            new_name = ""
-        new_name = new_name.split("ㅤ")[0].strip()
-        if "funpay" not in new_name.lower():
-            for m_name in add_to_name:
-                if len(new_name) + 2 + len(m_name) <= limit:
-                    new_name = f"{(new_name + ' ').ljust(limit - len(m_name) - 1, 'ㅤ')} {m_name}"
-                    break
-            if new_name != name:
-                self.bot.set_my_name(new_name)
-        sh_text = "🛠️ github.com/sidor0912/FunPayCardinal 💰 @sidor_donate 👨‍💻 @sidor0912 🧩 @fpc_plugins 🔄 @fpc_updates 💬 @funpay_cardinal"
-        res = self.bot.get_my_short_description().short_description
-        if res != sh_text:
-            self.bot.set_my_short_description(sh_text)
-        for i in [None, *localizer.languages.keys()]:
-            res = self.bot.get_my_description(i).description
-            text = _("adv_description", self.cardinal.VERSION, language=i)
-            if res != text:
-                self.bot.set_my_description(text, language_code=i)
+        В исходном проекте этот метод на каждом старте перезаписывал имя,
+        краткое и полное описание Telegram-бота, подставляя туда рекламу
+        и ссылки автора проекта. Публичная витрина бота принадлежит его
+        владельцу, поэтому автоматическая правка убрана: имя и описания
+        настраиваются вручную через @BotFather.
+        """
+        return
 
     def init(self):
         self.__register_handlers()

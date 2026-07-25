@@ -142,7 +142,6 @@ pl_pin = "Pin"
 pl_unpin = "Unpin"
 pl_commands = "⌨️ Commands"
 pl_settings = "⚙️ Settings"
-pl_buy = "💸 Buy plugin"
 
 # Configs
 cfg_download_main = "⤵️ Download main config"
@@ -159,13 +158,9 @@ tg_block_login = "{} Block logins by password"
 prx_proxy_add = "➕ Add proxy"
 
 # Links
-lnk_github = "🛠️ Create your FunPay bot"
-lnk_updates = "🔄 Updates"
-lnk_chat = "💬 Chat"
+lnk_chat = "💬 Support"
 
 # Announcements
-an_an = "{} Announcements"
-an_ad = "{} Advertisement"
 
 # New order
 ord_refund = "💸 Make a refund"
@@ -187,7 +182,7 @@ access_denied = "👋 Hi, <b><i>{}</i></b>!\n\n❌ You are an unauthorized user.
 access_granted = "🔓 Access granted!\n\n" \
                  "🔕 Keep in mind that I <b><u>don't send any notifications to this chat</u></b>.\n\n" \
                  "🔔 You can set up notifications for <b><u>this chat</u></b> in the settings menu.\n\n" \
-                 "⚙️ To open the <i>FunPay Cardinal</i> settings menu, send me /menu."
+                 "⚙️ To open the <i>{{BOT_NAME}}</i> settings menu, send me /menu."
 
 access_granted_notification = "<b>🚨 ATTENTION! 🚨\n\n\n</b>" * 3 + "\n\n\n🔐 \"<a href=\"tg://user?id={1}\"> {0} </a>\" <b>(ID: {1}) has just accessed the Telegram Control Panel! 🔓</b>"
 
@@ -196,37 +191,34 @@ param_disabled = "❌ This parameter is disabled globally and cannot be changed 
                  "(/menu -> ⚙️ Global switches)."
 
 old_mode_help = """<b>New Message Receiving Mode</b>
-✅ <i>FPC</i> gets the full chat history and sees all data about all new messages.
-✅ <i>FPC</i> can see images in chat and forward them to <i>Telegram</i> chat.
-✅ <i>FPC</i> can determine exactly who wrote, whether it was you, your interlocutor, or a 3rd party (arbitrator).
-❌ Because <i>FPC</i> gets the full chat history to detect new messages, the chat becomes "read" (not lit orange).
+✅ <i>{{BOT_SHORT_NAME}}</i> gets the full chat history and sees all data about all new messages.
+✅ <i>{{BOT_SHORT_NAME}}</i> can see images in chat and forward them to <i>Telegram</i> chat.
+✅ <i>{{BOT_SHORT_NAME}}</i> can determine exactly who wrote, whether it was you, your interlocutor, or a 3rd party (arbitrator).
+❌ Because <i>{{BOT_SHORT_NAME}}</i> gets the full chat history to detect new messages, the chat becomes "read" (not lit orange).
 
 <b>Old Message Receiving Mode</b>
 ✅ Chats that you have not personally read remain unread (lit orange).
 ✅ Works a little bit faster than the new mode.
-❌ <i>FPC</i> doesn't get the full chat history, so it sees only the last message. If the user quickly writes several messages, <i>FPC</i> will see only the last one.
-❌ <i>FPC</i> cannot see images in chat and forward them to <i>Telegram</i> chat.
-❌ <i>FPC</i> cannot determine exactly who wrote: you or the person you are chatting with. If the chat is not read, then the message is from the interlocutor, otherwise it is from you. However, if you are viewing the chat when you receive messages, this logic can sometimes fail. Also, <i>FPC</i> will not be able to determine if a 3rd party (arbitrator) wrote into the chat.
+❌ <i>{{BOT_SHORT_NAME}}</i> doesn't get the full chat history, so it sees only the last message. If the user quickly writes several messages, <i>{{BOT_SHORT_NAME}}</i> will see only the last one.
+❌ <i>{{BOT_SHORT_NAME}}</i> cannot see images in chat and forward them to <i>Telegram</i> chat.
+❌ <i>{{BOT_SHORT_NAME}}</i> cannot determine exactly who wrote: you or the person you are chatting with. If the chat is not read, then the message is from the interlocutor, otherwise it is from you. However, if you are viewing the chat when you receive messages, this logic can sometimes fail. Also, <i>{{BOT_SHORT_NAME}}</i> will not be able to determine if a 3rd party (arbitrator) wrote into the chat.
 
-❗ If you click the <code>More</code> button in a new message notification, <i>FPC</i> will "read" the chat and show the last 15 messages, including images. <i>FPC</i> will also be able to determine who the author of the messages is."""
+❗ If you click the <code>More</code> button in a new message notification, <i>{{BOT_SHORT_NAME}}</i> will "read" the chat and show the last 15 messages, including images. <i>{{BOT_SHORT_NAME}}</i> will also be able to determine who the author of the messages is."""
 
 bot_started = """✅ Telegram bot is running!\n
 ✅ You can <b><u>customize configurations</u></b> and <b><u>make full use of the <i>Telegram</i> bot's functionality.</u></b>.\n
-❌ <i>FunPay Cardinal</i> is not initialized yet and none of its functions work.\n
-🔃 As soon as <i>FunPay Cardinal</i> is initialized, this message will change.\n
-📋 If <i>FPC</i> does not initialize for a long time, check the logs with /logs"""
+❌ <i>{{BOT_NAME}}</i> is not initialized yet and none of its functions work.\n
+🔃 As soon as <i>{{BOT_NAME}}</i> is initialized, this message will change.\n
+📋 If <i>{{BOT_SHORT_NAME}}</i> does not initialize for a long time, check the logs with /logs"""
 
-fpc_init = """✅ <b><u>FunPay Cardinal initialized!</u></b>\n
+fpc_init = """✅ <b><u>{{BOT_NAME}} is up and running.</u></b>\n
 ℹ️ <b><i>Version:</i></b> <code>{}</code>
 👑 <b><i>Account:</i></b>  <code>{}</code> | <code>{}</code>
 💰 <b><i>Balance:</i></b> <code>{}₽, {}$, {}€</code>
 📊 <b><i>Active orders:</i></b>  <code>{}</code>
 
-💬 <b><i>Telegram chat:</i></b> @funpay_cardinal
-🔄 <b><i>Updates:</i></b> @fpc_updates
-🧩 <b><i>Plugins:</i></b> @fpc_plugins
-👨‍💻 <b><i>Developer:</i></b> @woopertail, @sidor0912
-🤑 <b><i>Donate:</i></b> @sidor_donate"""
+⚙️ Settings - /menu
+📋 Logs - /logs"""
 
 create_test_ad_key = "Enter the name of the lot whose auto-delivery you want to test."
 
@@ -234,24 +226,23 @@ test_ad_key_created = """✅ A one-time key for <code>{}</code> delivery has bee
 Send the command from below to chat with the user to whom you want to deliver the item.\n
 <code>!автовыдача {}</code>"""
 
-about = """<b>🐦 FunPay Cardinal 🐦 v{}</b>\n
-<i>Telegram chat:</i> @funpay_cardinal
-<i>Updates:</i> @fpc_updates
-<i>Plugins:</i> @fpc_plugins
-<i>Developer:</i> @woopertail, @sidor0912
-<i>Donate:</i> @sidor_donate"""
+about = """<b>{{BOT_NAME}} v{}</b>\n
+FunPay sales automation: product delivery, auto-replies, lot raising,
+full control from Telegram.
+
+<i>Based on the open-source {{BOT_NAME}} - see NOTICE.md in the repository.</i>"""
 
 sys_info = """<b><u>Data summary</u></b>
 
 <b>CPU:</b>
 {}
-    Used by <i>FPC</i>: <code>{}%</code>
+    Used by <i>{{BOT_SHORT_NAME}}</i>: <code>{}%</code>
 
 <b>RAM:</b>
     Total:  <code>{} MB</code>
     Used:  <code>{} MB</code>
     Free:  <code>{} MB</code>
-    Used by <i>FPC</i>:  <code>{} MB</code>
+    Used by <i>{{BOT_SHORT_NAME}}</i>:  <code>{} MB</code>
 
 <b>Other:</b>
     Uptime:  <code>{}</code>
@@ -280,7 +271,7 @@ act_edit_watermark = "Enter a new watermark text. For example:\n{}\n" \
                      "<code>𝗙𝘂𝗻𝗣𝗮𝘆 𝗖𝗮𝗿𝗱𝗶𝗻𝗮𝗹</code>\n<code>𝘍𝘶𝘯𝘗𝘢𝘺 𝘊𝘢𝘳𝘥𝘪𝘯𝘢𝘭</code>\n" \
                      "<code>𝙁𝙪𝙣𝙋𝙖𝙮 𝘾𝙖𝙧𝙙𝙞𝙣𝙖𝙡</code>\n<code>𝙵𝚞𝚗𝙿𝚊𝚢 𝙲𝚊𝚛𝚍𝚒𝚗𝚊𝚕</code>\n" \
                      "<code>ᖴᑌᑎᑭᗩY ᑕᗩᖇᗪIᑎᗩᒪ</code>\n" \
-                     "<code>FunPay Cardinal</code>\n<code>[FunPay / Cardinal]</code>\n" \
+                     "<code>{{BOT_NAME}}</code>\n<code>[FunPay / Cardinal]</code>\n" \
                      "<code>🤖</code>\n<code>🐦</code>\n\n" \
                      "You can tap on the examples to copy and edit them to your liking.\nNote that on FunPay, the emoji " \
                      "🐦 looks different than in Telegram." \
@@ -294,22 +285,11 @@ logfile_sending = "Sending log file (it may take some time)..."
 logfile_error = "❌ Failed to send log file."
 logfile_deleted = "🗑️ Deleted {} logfile(s)."
 
-update_no_tags = "❌ Failed to get the version list. Try again later."
-update_lasted = "✅ You have the latest version FunPayCardinal {}"
-update_get_error = "❌ Failed to get new version information. Try again later."
-update_available = "<b><u>New version available!</u></b>\n\n\n{}\n\n{}"
-update_update = "To update, enter the command /update"
-update_backup = "✅ Backup of configs, storage and plugins <code>backup.zip</code>.\n\n" \
+backup_ready = "✅ Backup of configs, storage and plugins <code>backup.zip</code>.\n\n" \
                 "⚠️ DO NOT SEND this archive to ANYONE. It contains ABSOLUTELY ALL content and settings of the bot (including golden_key and product files)."
-update_backup_error = "❌ Failed to back up configs, storage and plugins."
-update_backup_send_error = "❌ Failed to send the backup."
-update_backup_not_found = "❌ Backup not found."
-update_downloaded = "✅ The update {} is downloaded (skipped {} items). Installing..."
-update_download_error = "❌ An error occurred while downloading the update."
-update_done = "✅ The update is installed! Restart the FPC with the /restart command."
-update_done_exe = "✅ The update is installed! New <code>FPC.exe</code> is in <code>update</code> folder. " \
-                  "Turn off <i>FPC</i>, replace old <code>FPC.exe</code> with new one and run <code>Start.bat</code>. "
-update_install_error = "❌ An error occurred while installing the update."
+backup_error = "❌ Failed to back up configs, storage and plugins."
+backup_send_error = "❌ Failed to send the backup."
+backup_not_found = "❌ Backup not found."
 
 send_backup = "Send me the backup.\n\n<b>⚠️ WARNING! Uploading backups from untrusted sources may lead to serious consequences.</b>"
 
@@ -418,36 +398,20 @@ tmplt_added = "✅ Template added."
 tmplt_msg_sent = "✅ Message sent to <a href=\"https://funpay.com/chat/?node={}\">{}</a> chat.\n\n<code>{}</code>"
 
 pl_not_found_err = "❌ Plugin with UUID <code>{}</code> not found."
-pl_file_not_found_err = "❌  File <code>{}</code> not found.\nRestart <i>FPC</i> with command /restart."
+pl_file_not_found_err = "❌  File <code>{}</code> not found.\nRestart <i>{{BOT_SHORT_NAME}}</i> with command /restart."
 pl_commands_list = "<b><i>{}</i></b> plugin commands list."
 pl_author = "Dev"
-pl_new = "Send me a plugin.\n\n<b>⚠️ ATTENTION! Downloading plugins from questionable sources may lead to unfortunate consequences.\n" \
-         "@fpc_plugins solves most potential issues.</b>"
+pl_new = "Send me a plugin file (<code>.py</code>).\n\n" \
+         "<b>⚠️ A plugin runs with the same privileges as the bot: it can read golden_key, " \
+         "the Telegram token and the file system. Only install code you have read yourself " \
+         "or received from a trusted source.</b>"
 
 au_user_settings = "Settings for user {}"
-adv_fpc = "😎 FunPay Cardinal - the best bot for FunPay"
-adv_description = """🐦 FunPay Cardinal v{}🐦
-
-🤖 Automatic product delivery
-🚀 Auto-raise of lots
-💬 Auto-reply to prepared commands
-🔄 Auto-recovery of lots after sale
-📦 Auto-deactivation of lots if products are out of stock
-🔝 Permanent online presence
-📲 Notifications in Telegram
-🕹️ Full control panel in Telegram
-🧩 Plugins
-🌟 And much more...
-
-🛠️ Create your own bot: github.com/sidor0912/FunPayCardinal
-🔄 Updates: @fpc_updates
-🧩 Plugins: @fpc_plugins
-💬 Chat: @funpay_cardinal"""
 
 # - Menus desc
 desc_main = "Select a settings category."
 desc_lang = desc_main
-desc_gs = "Here you can turn the basic <i>FPC</i> functions on and off."
+desc_gs = "Here you can turn the basic <i>{{BOT_SHORT_NAME}}</i> functions on and off."
 desc_ns = """Here you can configure notifications.\n
 <b><u>Settings are separate for each <i>Telegram</i> chat!</u></b>\n
 Current chat ID: <code>{}</code>"""
@@ -466,7 +430,6 @@ desc_mv = "Here you can configure the appearance of new message notifications."
 desc_gr = "Here you can configure the welcome message for new users.\n\n<b>Greeting text:</b>\n<code>{}</code>"
 desc_oc = "Here you can configure an order confirmation message.\n\n<b>Message text:</b>\n<code>{}</code>"
 desc_or = "Here you can configure your response to feedback."
-desc_an = "Here you can configure notifications about announcements."
 desc_cfg = "Hare you can download and upload configs."
 desc_tmplt = "Here you can add and delete answer templates."
 desc_pl = "Here you can get information about the plugins, as well as configure them.\n\n" \
@@ -491,14 +454,13 @@ cmd_watermark = "change message watermark"
 cmd_logs = "download current log-file"
 cmd_del_logs = "delete old log-files"
 cmd_about = "about current version"
-cmd_check_updates = "check for updates"
-cmd_update = "upgrade to the next version"
+cmd_update = "how to update the bot"
 cmd_sys = "system load information"
 cmd_create_backup = "create backup"
 cmd_get_backup = "get backup"
 cmd_upload_backup = "upload backup"
-cmd_restart = "restart FPC"
-cmd_power_off = "shutdown FPC"
+cmd_restart = "restart {{BOT_SHORT_NAME}}"
+cmd_power_off = "shutdown {{BOT_SHORT_NAME}}"
 
 # - Variables desc
 v_edit_greeting_text = "Enter the text of the welcome message."
@@ -642,3 +604,18 @@ crd_uuid_already_registered = "UUID {} ({}) is already registered."
 crd_handlers_registered = "The handlers from $YELLOW{}.py$RESET are registered."
 crd_handler_err = "An error occurred in the handler's execution."
 crd_tg_au_err = "Failed to update the message with user information: {}. I will try without a link."
+
+# --- 4FunPay ---
+update_manual_help = """ℹ️ Installed version: <code>{}</code>.\n
+🔄 Built-in self-updating is disabled on purpose: the code is updated via git,
+so an update cannot arrive from a third-party source.\n
+<b>How to update on the server:</b>
+<code>sudo systemctl stop {{SERVICE_NAME}}@$USER
+cd ~/{{SERVICE_NAME}} && git pull
+~/pyvenv/bin/pip install -U -r requirements.txt
+sudo systemctl start {{SERVICE_NAME}}@$USER</code>\n
+💾 Make a backup with /create_backup before updating."""
+access_denied_short = "🔒 Access denied. This bot is private."
+lang_switched_notice = "The translation may be incomplete. Report inaccuracies to the bot owner."
+lnk_repo = "🛠️ Repository"
+lnk_owner = "👤 Owner"

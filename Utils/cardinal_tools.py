@@ -24,7 +24,7 @@ import logging
 
 PHOTO_RE = re.compile(r'\$photo=[\d]+')
 ENTITY_RE = re.compile(r"\$photo=\d+|\$new|(\$sleep=(\d+\.\d+|\d+))")
-logger = logging.getLogger("FPC.cardinal_tools")
+logger = logging.getLogger("4FP.cardinal_tools")
 localizer = Localizer()
 _ = localizer.translate
 
@@ -500,7 +500,7 @@ def format_order_text(text: str, order: FunPayAPI.types.OrderShortcut | FunPayAP
 
 def restart_program():
     """
-    Полный перезапуск FPC.
+    Полный перезапуск бота.
     """
     python = sys.executable
     os.execl(python, python, *sys.argv)
@@ -516,7 +516,7 @@ def restart_program():
 
 def shut_down():
     """
-    Полное отключение FPC.
+    Полное отключение бота.
     """
     try:
         process = psutil.Process()

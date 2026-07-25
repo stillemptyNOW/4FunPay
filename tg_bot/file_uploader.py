@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from cardinal import Cardinal
     from tg_bot.bot import TGBot
 
-from Utils import config_loader as cfg_loader, exceptions as excs, cardinal_tools, updater
+from Utils import config_loader as cfg_loader, exceptions as excs, cardinal_tools, backup
 from telebot.types import InlineKeyboardButton as Button
 from tg_bot import utils, keyboards, CBT
 from tg_bot.static_keyboards import CLEAR_STATE_BTN
@@ -258,7 +258,7 @@ def init_uploader(cardinal: Cardinal):
             .add(Button("◀️Назад", callback_data=f"{CBT.PLUGINS_LIST}:{offset}"))
         bot.send_message(m.chat.id,
                          f"✅ Плагин <code>{utils.escape(m.document.file_name)}</code> успешно загружен.\n\n"
-                         f"⚠️Чтобы плагин активировался, <u><b>перезагрузите FPC!</b></u> (/restart)",
+                         f"⚠️ Чтобы плагин активировался, <u><b>перезапусти бота</b></u> командой /restart",
                          reply_markup=keyboard)
 
     def send_funpay_image(m: types.Message):
@@ -339,12 +339,12 @@ def init_uploader(cardinal: Cardinal):
             return
         if not download_file(tg, m, "backup.zip"):
             return
-        if not updater.extract_backup_archive():
+        if not backup.extract_backup_archive():
             tg.bot.send_message(m.chat.id, "❌ Возникла ошибка при распаковке архива.")
             return
         tg.bot.send_message(m.chat.id, "✅ Бекап загружен.")
 
-        if not updater.install_backup():
+        if not backup.install_backup():
             tg.bot.send_message(m.chat.id, "❌ Возникла ошибка при переносе файлов.")
             return
         tg.bot.send_message(m.chat.id, "✅ Бекап использован. Используй команду /restart.")

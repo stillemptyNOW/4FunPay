@@ -26,7 +26,7 @@ import os
 from pip._internal.cli.main import main
 import FunPayAPI
 import handlers
-import announcements
+import branding
 from locales.localizer import Localizer
 from FunPayAPI import utils as fp_utils
 from Utils import cardinal_tools
@@ -34,7 +34,7 @@ import tg_bot.bot
 
 from threading import Thread
 
-logger = logging.getLogger("FPC")
+logger = logging.getLogger("4FP")
 localizer = Localizer()
 _ = localizer.translate
 
@@ -217,7 +217,8 @@ class Cardinal(object):
                 self.account.get()
                 self.balance = self.get_balance()
                 greeting_text = cardinal_tools.create_greeting_text(self)
-                cardinal_tools.set_console_title(f"FunPay Cardinal - {self.account.username} ({self.account.id})")
+                cardinal_tools.set_console_title(
+                    f"{branding.CONSOLE_TITLE} - {self.account.username} ({self.account.id})")
                 for line in greeting_text.split("\n"):
                     logger.info(line)
                 break
@@ -639,7 +640,6 @@ class Cardinal(object):
         получает данные аккаунта и профиля.
         """
         self.add_handlers_from_plugin(handlers)
-        self.add_handlers_from_plugin(announcements)
         self.load_plugins()
         self.add_handlers()
 

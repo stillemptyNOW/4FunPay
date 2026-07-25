@@ -30,6 +30,21 @@ from .common import exceptions, utils, enums
 logger = logging.getLogger("FunPayAPI.account")
 PRIVATE_CHAT_ID_RE = re.compile(r"users-\d+-\d+$")
 
+BOT_IMAGE_FILENAME = "bot_image.png"
+"""
+Имя файла, под которым бот загружает изображения в чат FunPay.
+
+Имя уходит на сервер FunPay и видно собеседнику в атрибуте ``alt`` картинки,
+поэтому оно нейтральное и не содержит названия проекта.
+
+Служит единственным маркером "изображение отправлено ботом": у картинок нет
+текста, поэтому обычный маркер (невидимый символ в начале сообщения) для них
+не применим. Значение должно совпадать с :data:`BOT_IMAGE_MARKER`.
+"""
+
+BOT_IMAGE_MARKER = "bot_image"
+"""Подстрока в имени файла, по которой изображение распознаётся как отправленное ботом."""
+
 
 class Account:
     """
@@ -788,7 +803,7 @@ class Account:
             img = image
 
         fields = {
-            'file': ("Отправлено_с_помощью_бота_FunPay_Cardinal.png", img, "image/png"),
+            'file': (BOT_IMAGE_FILENAME, img, "image/png"),
             'file_id': "0"
         }
         boundary = '----WebKitFormBoundary' + ''.join(random.sample(string.ascii_letters + string.digits, 16))
@@ -2140,10 +2155,12 @@ class Account:
                 image_name = image_name.get('alt') if image_name else None
                 image_link = image_tag.get("href")
                 message_text = None
-                # "Отправлено_с_помощью_бота_FunPay_Cardinal.png", "funpay_cardinal_image.png"
-                if isinstance(image_name, str) and "funpay_cardinal" in image_name.lower():
+                # У картинок нет текста, поэтому маркер "отправлено ботом" - имя файла.
+                if isinstance(image_name, str) and BOT_IMAGE_MARKER in image_name.lower():
                     by_bot = True
                 elif image_name == "funpay_vertex_image.png":
+                    # Маркер сторонней разработки (FunPay Vertex) - оставлен, чтобы
+                    # распознавать ботов собеседников, а не наши собственные сообщения.
                     by_vertex = True
 
             else:

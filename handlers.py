@@ -16,6 +16,7 @@ from FunPayAPI.updater.events import *
 from tg_bot import utils, keyboards
 from Utils import cardinal_tools
 from locales.localizer import Localizer
+import branding
 from threading import Thread
 import configparser
 from datetime import datetime
@@ -26,7 +27,7 @@ import re
 LAST_STACK_ID = ""
 MSG_LOG_LAST_STACK_ID = ""
 
-logger = logging.getLogger("FPC.handlers")
+logger = logging.getLogger("4FP.handlers")
 localizer = Localizer()
 _ = localizer.translate
 
@@ -280,7 +281,8 @@ def send_new_msg_notification_handler(c: Cardinal, e: NewMessageEvent) -> None:
                 i.message.badge == last_badge and i.message.by_vertex == last_by_vertex:
             author = ""
         elif i.message.author_id == c.account.id:
-            author = f"<i><b>🤖 {_('you')} (<i>FPC</i>):</b></i> " if i.message.by_bot else f"<i><b>🫵 {_('you')}:</b></i> "
+            author = (f"<i><b>🤖 {_('you')} (<i>{branding.BOT_SHORT_NAME}</i>):</b></i> " if i.message.by_bot
+                      else f"<i><b>🫵 {_('you')}:</b></i> ")
             if i.message.is_autoreply:
                 author = f"<i><b>📦 {_('you')} ({i.message.badge}):</b></i> "
         elif i.message.author_id == 0:

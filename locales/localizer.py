@@ -1,6 +1,7 @@
 from typing import Literal
 
 from locales import ru, en, uk
+import branding
 import logging
 
 logger = logging.getLogger("localizer")
@@ -26,6 +27,9 @@ class Localizer:
         """
         Возвращает форматированный локализированный текст.
 
+        Плейсхолдеры бренда (``{{BOT_NAME}}``, ``{{SUPPORT_CHAT}}`` и т.д.)
+        подставляются из :mod:`branding` до форматирования аргументами.
+
         :param variable_name: название переменной с текстом.
         :param args: аргументы для форматирования.
         :param language: язык перевода, опционально.
@@ -40,6 +44,7 @@ class Localizer:
         if language and language in self.languages.keys() and hasattr(self.languages[language], variable_name):
             text = getattr(self.languages[language], variable_name)
 
+        text = branding.apply(text)
         args = list(args)
         formats = text.count("{}")
         if len(args) < formats:

@@ -68,6 +68,5 @@ def CONFIGS_UPLOADER() -> K:
 
 def UPLOAD_PLUGIN() -> K:
     return (K()
-            .add(B(_("pl_buy"), url="https://t.me/sidor0912"))
             .add(B(_("gl_cancel"), callback_data=CBT.CLEAR_STATE)))
 

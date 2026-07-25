@@ -14,6 +14,7 @@ from tg_bot import CBT, MENU_CFG
 from tg_bot.utils import NotificationTypes, bool_to_text, add_navigation_buttons
 
 import Utils
+import branding
 from locales.localizer import Localizer
 
 import logging
@@ -302,27 +303,6 @@ def notifications_settings(c: Cardinal, chat_id: int) -> K:
         .add(B(_("ns_bot_start", l(n.bot_start)), None, f"{p}:{n.bot_start}")) \
         .add(B(_("ns_other", l(n.other)), None, f"{p}:{n.other}")) \
         .add(B(_("gl_back"), None, CBT.MAIN))
-    return kb
-
-
-def announcements_settings(c: Cardinal, chat_id: int):
-    """
-    Генерирует клавиатуру настроек уведомлений объявлений.
-
-    :param c: объект кардинала.
-    :param chat_id: ID чата, в котором вызвана клавиатура.
-
-    :return: объект клавиатуры настроек уведомлений объявлений.
-    """
-    p = f"{CBT.SWITCH_TG_NOTIFICATIONS}:{chat_id}"
-    n = NotificationTypes
-
-    def l(nt):
-        return '🔔' if c.telegram.is_notification_enabled(chat_id, nt) else '🔕'
-
-    kb = K() \
-        .add(B(_("an_an", l(n.announcement)), None, f"{p}:{n.announcement}")) \
-        .add(B(_("an_ad", l(n.ad)), None, f"{p}:{n.ad}"))
     return kb
 
 
@@ -752,9 +732,30 @@ def edit_plugin(c: Cardinal, uuid: str, offset: int, ask_to_delete: bool = False
     return kb
 
 
-def links(language: None | str = None) -> K:
-    return K().add(B(_("lnk_github", language=language),
-                     url="https://github.com/sidor0912/FunPayCardinal")) \
-        .add(B(_("lnk_updates", language=language), url="https://t.me/fpc_updates")) \
-        .add(B(_("mm_plugins", language=language), url="https://t.me/fpc_plugins")) \
-        .add(B(_("lnk_chat", language=language), url="https://t.me/funpay_cardinal"))
+def support_links(language: None | str = None) -> K | None:
+    """
+    Генерирует клавиатуру со ссылками на ресурсы проекта для команды /about.
+
+    Ссылки берутся из :mod:`branding`. Кнопка добавляется только если значение
+    заполнено: незаполненный плейсхолдер вида ``{{REPO_URL}}`` не является
+    валидным URL и был бы отвергнут Telegram.
+
+    :param language: язык подписей кнопок, опционально.
+
+    :return: объект клавиатуры или None, если ни одна ссылка не заполнена.
+    """
+    buttons = []
+    if "{{" not in branding.REPO_URL:
+        buttons.append(B(_("lnk_repo", language=language), url=branding.REPO_URL))
+    if "{{" not in branding.SUPPORT_CHAT:
+        buttons.append(B(_("lnk_chat", language=language),
+                         url=f"https://t.me/{branding.SUPPORT_CHAT.lstrip('@')}"))
+    if "{{" not in branding.OWNER_TG:
+        buttons.append(B(_("lnk_owner", language=language),
+                         url=f"https://t.me/{branding.OWNER_TG.lstrip('@')}"))
+    if not buttons:
+        return None
+    kb = K()
+    for button in buttons:
+        kb.add(button)
+    return kb

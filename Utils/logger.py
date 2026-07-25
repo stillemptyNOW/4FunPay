@@ -134,7 +134,7 @@ LOGGER_CONFIG = {
             "handlers": ["cli_handler", "file_handler"],
             "level": "DEBUG"
         },
-        "FPC": {
+        "4FP": {
             "handlers": ["cli_handler", "file_handler"],
             "level": "DEBUG"
         },
