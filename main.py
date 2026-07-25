@@ -63,7 +63,13 @@ import Utils.exceptions as excs
 from cardinal import Cardinal
 from first_setup import first_setup
 from locales.localizer import Localizer
+from Utils import secrets
 from Utils.logger import LOGGER_CONFIG
+
+# Переменные из .env подгружаются до чтения конфига, чтобы они могли
+# перекрыть значения секретов. Уже заданные переменные окружения
+# (systemd, docker compose) приоритетнее файла.
+secrets.load_dotenv_file()
 
 VERSION = branding.VERSION
 
@@ -168,6 +174,21 @@ except Exception:
     sys.exit(1)
 
 localizer = Localizer(MAIN_CFG["Other"]["language"])
+
+# --- Проверка секретов -----------------------------------------------------
+# Формат конфига уже проверен выше. Здесь проверяется, что golden_key и токен
+# Telegram реально заданы - в конфиге или в переменных окружения. Без этого
+# бот падал бы позже и менее внятно: на первом запросе к FunPay.
+
+if problems := secrets.check_startup_secrets(MAIN_CFG):
+    logger.error("Не могу запуститься, конфигурация неполная:")
+    for number, problem in enumerate(problems, 1):
+        logger.error(f"  {number}. {problem}")
+    logger.error("Исправь перечисленное и запусти снова.")
+    time.sleep(5)
+    sys.exit(1)
+
+logger.info(f"$CYANgolden_key: {secrets.mask(secrets.golden_key(MAIN_CFG))}")
 
 # --- Запуск ядра -----------------------------------------------------------
 

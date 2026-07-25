@@ -26,7 +26,7 @@ import logging
 from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, Message, CallbackQuery, BotCommand, \
     InputFile
 from tg_bot import utils, static_keyboards as skb, keyboards as kb, CBT
-from Utils import cardinal_tools, backup
+from Utils import cardinal_tools, backup, secrets
 from locales.localizer import Localizer
 import branding
 
@@ -42,7 +42,7 @@ class TGBot:
         if cardinal.MAIN_CFG["Telegram"]["proxy"]:
             telebot.apihelper.proxy = {"https": cardinal.MAIN_CFG["Telegram"]["proxy"],
                                        "http": cardinal.MAIN_CFG["Telegram"]["proxy"]}
-        self.bot = telebot.TeleBot(self.cardinal.MAIN_CFG["Telegram"]["token"], parse_mode="HTML",
+        self.bot = telebot.TeleBot(secrets.telegram_token(cardinal.MAIN_CFG), parse_mode="HTML",
                                    allow_sending_without_reply=True, num_threads=5)
 
         self.file_handlers = {}  # хэндлеры, привязанные к получению файла.
@@ -342,6 +342,11 @@ class TGBot:
         """
         Активирует режим ввода golden_key.
         """
+        # Если ключ задан переменной окружения, запись в конфиг будет перекрыта
+        # при следующем запуске - предупреждаем сразу, а не молча теряем правку.
+        if secrets.is_from_env(secrets.GOLDEN_KEY_ENV):
+            self.bot.send_message(m.chat.id, _("golden_key_from_env", secrets.GOLDEN_KEY_ENV))
+            return
         result = self.bot.send_message(m.chat.id, _("act_change_golden_key"), reply_markup=skb.CLEAR_STATE_BTN())
         self.set_state(m.chat.id, result.id, m.from_user.id, CBT.CHANGE_GOLDEN_KEY)
 
@@ -350,11 +355,17 @@ class TGBot:
         Меняет golden_key аккаунта FunPay.
         """
         self.clear_state(m.chat.id, m.from_user.id, True)
-        golden_key = m.text
+        golden_key = m.text.strip()
+        # Удаляем сообщение с ключом сразу, до любых проверок: даже неверно
+        # введённое значение не должно остаться висеть в истории чата.
+        try:
+            self.bot.delete_message(m.chat.id, m.id)
+        except Exception:
+            logger.debug("Не удалось удалить сообщение с golden_key", exc_info=True)
+
         if len(golden_key) != 32 or golden_key != golden_key.lower() or len(golden_key.split()) != 1:
             self.bot.send_message(m.chat.id, _("cookie_incorrect_format"))
             return
-        self.bot.delete_message(m.chat.id, m.id)
         new_account = Account(golden_key, self.cardinal.account.user_agent, proxy=self.cardinal.proxy,
                               locale=self.cardinal.account.locale)
         try:

@@ -29,8 +29,9 @@ import handlers
 import branding
 from locales.localizer import Localizer
 from FunPayAPI import utils as fp_utils
-from Utils import cardinal_tools
+from Utils import cardinal_tools, secrets
 import tg_bot.bot
+import tg_bot.utils
 
 from threading import Thread
 
@@ -125,7 +126,9 @@ class Cardinal(object):
                 if self.MAIN_CFG["Proxy"].getboolean("check") and not cardinal_tools.check_proxy(self.proxy):
                     sys.exit()
 
-        self.account = FunPayAPI.Account(self.MAIN_CFG["FunPay"]["golden_key"],
+        # Секреты берутся через Utils.secrets: переменная окружения имеет
+        # приоритет над конфигом и не попадает в файл при его перезаписи.
+        self.account = FunPayAPI.Account(secrets.golden_key(self.MAIN_CFG),
                                          self.MAIN_CFG["FunPay"]["user_agent"],
                                          proxy=self.proxy)
         self.runner: FunPayAPI.Runner | None = None
@@ -208,9 +211,53 @@ class Cardinal(object):
         self.disabled_plugins = cardinal_tools.load_disabled_plugins()
         self.pinned_plugins = cardinal_tools.load_pinned_plugins()
 
+        # Уже сообщали в Telegram о проблеме с авторизацией? Нужно, чтобы
+        # не спамить одним и тем же уведомлением на каждой попытке подключения.
+        self.__auth_problem_reported: bool = False
+
+    AUTH_RETRY_DELAY = 30
+    """Пауза между попытками подключения при отклонённом golden_key, секунды."""
+
+    def __notify_auth_problem(self) -> None:
+        """
+        Сообщает в Telegram, что FunPay отклонил golden_key.
+
+        Уведомление отправляется один раз на серию неудач: без этого при
+        недействительном ключе владелец видел бы только строки в консоли,
+        куда на сервере никто не смотрит, и считал бы бота работающим.
+        """
+        if self.__auth_problem_reported or not self.telegram:
+            return
+        self.__auth_problem_reported = True
+        try:
+            self.telegram.send_notification(
+                _("auth_expired", self.AUTH_RETRY_DELAY),
+                notification_type=tg_bot.utils.NotificationTypes.critical)
+        except Exception:
+            logger.debug("Не удалось отправить уведомление о проблеме авторизации", exc_info=True)
+
+    def __notify_auth_restored(self) -> None:
+        """Сообщает в Telegram, что подключение к FunPay восстановлено."""
+        if not self.__auth_problem_reported:
+            return
+        self.__auth_problem_reported = False
+        if not self.telegram:
+            return
+        try:
+            self.telegram.send_notification(
+                _("auth_restored", self.account.username),
+                notification_type=tg_bot.utils.NotificationTypes.critical)
+        except Exception:
+            logger.debug("Не удалось отправить уведомление о восстановлении", exc_info=True)
+
     def __init_account(self) -> None:
         """
-        Инициализирует класс аккаунта (self.account)
+        Получает данные аккаунта, дожидаясь успеха.
+
+        Цикл бесконечный намеренно: бот на сервере должен сам подняться, когда
+        FunPay станет доступен или владелец обновит golden_key через Telegram.
+        Отличие от простого повтора - при ошибке авторизации владелец получает
+        уведомление в Telegram с инструкцией, а не только запись в логе.
         """
         while True:
             try:
@@ -221,17 +268,28 @@ class Cardinal(object):
                     f"{branding.CONSOLE_TITLE} - {self.account.username} ({self.account.id})")
                 for line in greeting_text.split("\n"):
                     logger.info(line)
+                self.__notify_auth_restored()
                 break
             except TimeoutError:
                 logger.error(_("crd_acc_get_timeout_err"))
-            except (FunPayAPI.exceptions.UnauthorizedError, FunPayAPI.exceptions.RequestFailedError) as e:
+                delay = 2
+            except FunPayAPI.exceptions.UnauthorizedError as e:
+                # golden_key недействителен. Повторы сами по себе не помогут,
+                # нужно действие владельца - поэтому пишем в Telegram и ждём дольше.
                 logger.error(e.short_str())
                 logger.debug(f"TRACEBACK {e.short_str()}")
-            except:
+                self.__notify_auth_problem()
+                delay = self.AUTH_RETRY_DELAY
+            except FunPayAPI.exceptions.RequestFailedError as e:
+                logger.error(e.short_str())
+                logger.debug(f"TRACEBACK {e.short_str()}")
+                delay = 2
+            except Exception:
                 logger.error(_("crd_acc_get_unexpected_err"))
                 logger.debug("TRACEBACK", exc_info=True)
-            logger.warning(_("crd_try_again_in_n_secs", 2))
-            time.sleep(2)
+                delay = 2
+            logger.warning(_("crd_try_again_in_n_secs", delay))
+            time.sleep(delay)
 
     def __update_profile(self, infinite_polling: bool = True, attempts: int = 0, update_telegram_profile: bool = True,
                          update_main_profile: bool = True) -> bool:

@@ -68,7 +68,9 @@ def load_main_config(config_path: str):
     config = create_config_obj(config_path)
     values = {
         "FunPay": {
-            "golden_key": "any",
+            # Пустое значение допустимо: секрет может быть задан переменной
+            # окружения. Наличие проверяется отдельно в Utils.secrets.
+            "golden_key": "any+empty",
             "user_agent": "any+empty",
             "autoRaise": ["0", "1"],
             "autoResponse": ["0", "1"],
@@ -84,7 +86,7 @@ def load_main_config(config_path: str):
         "Telegram": {
             "enabled": ["0", "1"],
             "token": "any+empty",
-            "secretKeyHash": "any",
+            "secretKeyHash": "any+empty",
             "proxy": "any+empty",
             "blockLogin": ["0", "1"]
         },

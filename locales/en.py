@@ -624,3 +624,18 @@ access_denied_short = "🔒 Access denied. This bot is private."
 lang_switched_notice = "The translation may be incomplete. Report inaccuracies to the bot owner."
 lnk_repo = "🛠️ Repository"
 lnk_owner = "👤 Owner"
+golden_key_from_env = "🔒 golden_key is set via the environment variable <code>{}</code>.\n\n" \
+                      "Changing it from the bot has no effect: the environment value overrides " \
+                      "the config on the next start.\n\n" \
+                      "Change it where the variable is defined - systemd unit, .env file " \
+                      "or docker compose - then /restart."
+auth_expired = "🔑 <b>FunPay rejects the golden_key.</b>\n\n" \
+                      "The cookie has expired or was revoked. Usual causes: password change " \
+                      "on FunPay, signing out of all sessions, logging in from another device.\n\n" \
+                      "<b>What to do:</b>\n" \
+                      "1. Open funpay.com in a browser.\n" \
+                      "2. F12 -> Application -> Cookies -> https://funpay.com -> golden_key.\n" \
+                      "3. Copy the value and send me the /golden_key command.\n\n" \
+                      "Until the key is updated, auto-delivery and auto-replies do not work. " \
+                      "Reconnect attempts continue every {} sec."
+auth_restored = "✅ Connection to FunPay restored. Account: <code>{}</code>"
