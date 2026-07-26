@@ -365,6 +365,22 @@ class Cardinal(object):
             raise_ok = False
             error_text = ""
             time_delta = ""
+
+            # Хук перед поднятием. В исходном проекте список pre_lots_raise_handlers
+            # объявлялся и был заявлен как точка расширения BIND_TO_PRE_LOTS_RAISE,
+            # но не вызывался нигде - плагины на нём молча не работали.
+            # Обработчик может отложить поднятие категории, выставив
+            # category.postpone_raise = <секунд>.
+            self.run_handlers(self.pre_lots_raise_handlers, (self, subcat.category))
+            if postpone := getattr(subcat.category, "postpone_raise", 0):
+                setattr(subcat.category, "postpone_raise", 0)
+                next_time = time.time() + postpone
+                self.raise_time[subcat.category.id] = next_time
+                next_call = next_time if next_time < next_call else next_call
+                logger.info(_("crd_raise_postponed", subcat.category.name,
+                              cardinal_tools.time_to_str(int(postpone))))
+                continue
+
             try:
                 time.sleep(1)
                 wait_time = self.account.raise_lots(subcat.category.id)

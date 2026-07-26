@@ -468,7 +468,9 @@ def setup_event_attributes_handler(c: Cardinal, e: NewOrderEvent, *args):
 
     attributes = {"config_section_name": config_section_name, "config_section_obj": config_section_obj,
                   "delivered": False, "delivery_text": None, "goods_delivered": 0, "goods_left": None,
-                  "error": 0, "error_text": None, "lot_id": lot_id, "lot_shortcut": lot_shortcut}
+                  "error": 0, "error_text": None, "lot_id": lot_id, "lot_shortcut": lot_shortcut,
+                  # Заполняется обработчиками PRE_DELIVERY, см. deliver_product_handler.
+                  "delivery_blocked": False, "delivery_block_reason": None}
     for i in attributes:
         setattr(e, i, attributes[i])
 
@@ -568,6 +570,16 @@ def deliver_product_handler(c: Cardinal, e: NewOrderEvent, *args) -> None:
         return
 
     c.run_handlers(c.pre_delivery_handlers, (c, e))
+
+    # Обработчик PRE_DELIVERY может придержать выдачу, выставив
+    # e.delivery_blocked = True. В исходном проекте результат работы этих
+    # обработчиков игнорировался, и отменить выдачу из плагина было нельзя -
+    # хук годился только на побочные действия вроде логирования.
+    if getattr(e, "delivery_blocked", False):
+        reason = getattr(e, "delivery_block_reason", None) or "без указания причины"
+        logger.warning(f"Выдача по заказу $YELLOW{e.order.id}$RESET придержана: {reason}")
+        return
+
     deliver_goods(c, e, *args)
     c.run_handlers(c.post_delivery_handlers, (c, e))
 

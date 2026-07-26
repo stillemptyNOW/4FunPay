@@ -15,6 +15,7 @@
 !/plugins/audit_log.py
 !/plugins/price_monitor.py
 !/plugins/profit.py
+!/plugins/scam_guard.py
 !/plugins/sales_stats.py
 !/plugins/watchdog.py
 # Резервные копии (содержат configs/ целиком)
