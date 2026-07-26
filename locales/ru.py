@@ -18,7 +18,6 @@ gl_pcs = "шт."
 gl_last_update = "Последнее обновление"
 
 # - Главное меню
-mm_language = "🗣️ Язык"
 mm_global = "⚙️ Глобальные переключатели"
 mm_notifications = "🔔 Настройки уведомлений"
 mm_autoresponse = "🤖 Настройки автоответа"
@@ -408,7 +407,6 @@ au_user_settings = "Настройки для пользователя {}"
 
 # - Описания меню
 desc_main = "Выбери категорию настроек."
-desc_lang = desc_main
 desc_gs = "Здесь ты можешь включать и выключать основные функции <i>{{BOT_SHORT_NAME}}</i>."
 desc_ns = """Здесь ты можешь настроить уведомления.\n
 <b><u>Настройки раздельны для каждого <i>Telegram</i> чата!</u></b>\n
@@ -437,7 +435,6 @@ desc_au = "Здесь ты можешь настроить авторизаци�
 
 # - Описание команд
 cmd_menu = "открыть настройки"
-cmd_language = "изменить язык"
 cmd_profile = "статистика аккаунта"
 cmd_golden_key = "изменить golden_key"
 cmd_test_lot = "создать ключ выдачи"
@@ -611,7 +608,6 @@ cd ~/{{SERVICE_NAME}} && git pull
 sudo systemctl start {{SERVICE_NAME}}@$USER</code>\n
 💾 Перед обновлением сделай бэкап командой /create_backup."""
 access_denied_short = "🔒 Доступ закрыт. Этот бот приватный."
-lang_switched_notice = "Перевод может быть неполным. О неточностях сообщи владельцу бота."
 lnk_repo = "🛠️ Репозиторий"
 lnk_owner = "👤 Владелец"
 golden_key_from_env = "🔒 golden_key задан переменной окружения <code>{}</code>.\n\n" \

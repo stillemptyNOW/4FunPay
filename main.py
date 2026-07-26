@@ -159,7 +159,7 @@ if sys.platform == "linux" and os.getenv(branding.RUNTIME_ENV_FLAG, "0") == "1":
 try:
     logger.info("$MAGENTAЗагружаю конфиг _main.cfg...")
     MAIN_CFG = cfg_loader.load_main_config("configs/_main.cfg")
-    localizer = Localizer(MAIN_CFG["Other"]["language"])
+    localizer = Localizer()
     _ = localizer.translate
 
     logger.info("$MAGENTAЗагружаю конфиг auto_response.cfg...")
@@ -186,7 +186,7 @@ except Exception:
     time.sleep(5)
     sys.exit(1)
 
-localizer = Localizer(MAIN_CFG["Other"]["language"])
+localizer = Localizer()
 
 # --- Проверка секретов -----------------------------------------------------
 # Формат конфига уже проверен выше. Здесь проверяется, что golden_key и токен

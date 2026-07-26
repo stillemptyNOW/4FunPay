@@ -1,69 +1,107 @@
-from typing import Literal
+"""
+Тексты интерфейса.
 
-from locales import ru, en, uk
-import branding
+Проект одноязычный: интерфейс только на русском. Переводы на английский
+и украинский были убраны намеренно - каждую новую строку приходилось писать
+трижды, и две копии неизбежно отставали от третьей.
+
+Параметр ``language`` в методах сохранён и игнорируется. Он остался в подписях
+по двум причинам: его передаёт код панели управления, когда знает язык
+Telegram-клиента собеседника, и его могут передавать сторонние плагины.
+Убирать параметр из публичного API ради одного языка смысла нет.
+
+Не путать с ``FunPay.locale`` в конфиге: тот параметр задаёт язык страниц
+funpay.com и влияет на разбор разметки, а не на язык интерфейса.
+"""
+
+from __future__ import annotations
+
 import logging
+from typing import Any
+
+import branding
+from locales import ru
 
 logger = logging.getLogger("localizer")
 
+LANGUAGE = "ru"
+"""Единственный язык интерфейса."""
+
 
 class Localizer:
-    def __new__(cls, curr_lang: str | None = None):
+    """
+    Синглтон, отдающий локализованные тексты.
+
+    Экземпляр создаётся в каждом модуле как ``Localizer()``; аргумент
+    конструктора игнорируется и оставлен для совместимости с вызовами вида
+    ``Localizer(config["Other"]["language"])``.
+    """
+
+    def __new__(cls, curr_lang: str | None = None) -> "Localizer":
         if not hasattr(cls, "instance"):
-            cls.instance = super(Localizer, cls).__new__(cls)
-            cls.instance.languages = {
-                "ru": ru,
-                "en": en,
-                "uk": uk
-            }
-            cls.instance.current_language = "ru"
-        if curr_lang in cls.instance.languages:
-            cls.instance.current_language = curr_lang
-            cls.instance.languages = {k: v for k, v in sorted(cls.instance.languages.items(),
-                                                              key=lambda x: x[0] != curr_lang)}
+            cls.instance = super().__new__(cls)
+            cls.instance.languages = {LANGUAGE: ru}
+            cls.instance.current_language = LANGUAGE
         return cls.instance
 
-    def translate(self, variable_name: str, *args, language: str | None = None):
+    def translate(self, variable_name: str, *args: Any, language: str | None = None) -> str:
         """
-        Возвращает форматированный локализированный текст.
+        Возвращает форматированный текст по имени переменной.
 
-        Плейсхолдеры бренда (``{{BOT_NAME}}``, ``{{SUPPORT_CHAT}}`` и т.д.)
-        подставляются из :mod:`branding` до форматирования аргументами.
+        Плейсхолдеры бренда (``{{BOT_NAME}}`` и прочие) подставляются
+        из :mod:`branding` до форматирования аргументами.
+
+        Если переменной не существует, возвращается её имя - так опечатка
+        в ключе видна в интерфейсе, а не роняет обработчик.
 
         :param variable_name: название переменной с текстом.
-        :param args: аргументы для форматирования.
-        :param language: язык перевода, опционально.
+        :param args: аргументы для подстановки в ``{}``.
+        :param language: игнорируется, см. модульную докстрингу.
 
-        :return: форматированный локализированный текст.
+        :return: готовый текст.
         """
-        text = variable_name
-        for lang in self.languages.values():
-            if hasattr(lang, variable_name):
-                text = getattr(lang, variable_name)
-                break
-        if language and language in self.languages.keys() and hasattr(self.languages[language], variable_name):
-            text = getattr(self.languages[language], variable_name)
-
+        text = getattr(ru, variable_name, variable_name)
         text = branding.apply(text)
+
         args = list(args)
-        formats = text.count("{}")
-        if len(args) < formats:
-            args.extend(["{}"] * (formats - len(args)))
+        placeholders = text.count("{}")
+        if len(args) < placeholders:
+            args.extend(["{}"] * (placeholders - len(args)))
         try:
             return text.format(*args)
-        except:
+        except Exception:
             logger.debug("TRACEBACK", exc_info=True)
             return text
 
-    def add_translation(self, uuid: str, variable_name: str, value: str, language: Literal["uk", "ru", "en"]):
-        """Позволяет добавить перевод фраз из плагина."""
-        setattr(self.languages[language], f"{uuid}_{variable_name}", value)
+    def add_translation(self, uuid: str, variable_name: str, value: str,
+                        language: str | None = None) -> None:
+        """
+        Добавляет текст от плагина.
 
-    def plugin_translate(self, uuid: str, variable_name: str, *args, language: str | None = None):
-        """Позволяет получить перевод фраз из плагина."""
-        s = f"{uuid}_{variable_name}"
-        result = self.translate(s, *args, language=language)
-        if result != s:
+        Ключ префиксуется UUID плагина, чтобы плагины не перетирали
+        ни тексты ядра, ни тексты друг друга.
+
+        :param uuid: UUID плагина.
+        :param variable_name: название переменной.
+        :param value: текст.
+        :param language: игнорируется, см. модульную докстрингу.
+        """
+        setattr(ru, f"{uuid}_{variable_name}", value)
+
+    def plugin_translate(self, uuid: str, variable_name: str, *args: Any,
+                         language: str | None = None) -> str:
+        """
+        Возвращает текст плагина, откатываясь на текст ядра.
+
+        :param uuid: UUID плагина.
+        :param variable_name: название переменной.
+        :param args: аргументы для подстановки.
+        :param language: игнорируется, см. модульную докстрингу.
+
+        :return: текст плагина либо, если его нет, текст ядра.
+        """
+        prefixed = f"{uuid}_{variable_name}"
+        result = self.translate(prefixed, *args)
+        if result != prefixed:
             return result
-        else:
-            return self.translate(variable_name, *args, language=language)
+        return self.translate(variable_name, *args)

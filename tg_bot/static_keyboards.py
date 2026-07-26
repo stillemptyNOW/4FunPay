@@ -16,7 +16,6 @@ def REFRESH_BTN() -> K:
 
 def SETTINGS_SECTIONS() -> K:
     return K() \
-        .add(B(_("mm_language"), callback_data=f"{CBT.CATEGORY}:lang")) \
         .add(B(_("mm_global"), callback_data=f"{CBT.CATEGORY}:main")) \
         .add(B(_("mm_notifications"), callback_data=f"{CBT.CATEGORY}:tg")) \
         .add(B(_("mm_autoresponse"), callback_data=f"{CBT.CATEGORY}:ar")) \

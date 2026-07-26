@@ -103,7 +103,6 @@ DEFAULT_CONFIG: dict[str, dict[str, str]] = {
     "Other": {
         "watermark": "🤖",
         "requestsDelay": "4",
-        "language": "ru",
     },
 }
 

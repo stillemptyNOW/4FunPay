@@ -170,7 +170,6 @@ MAIN_CONFIG_SPEC: dict[str, dict[str, ParamSpec]] = {
     "Other": {
         "watermark": _text("🤖"),
         "requestsDelay": ParamSpec(valid=[str(i) for i in range(1, 101)], default="4"),
-        "language": ParamSpec(valid=SITE_LOCALES, default="ru"),
     },
 }
 """Схема основного конфига: допустимые значения и значения по умолчанию."""

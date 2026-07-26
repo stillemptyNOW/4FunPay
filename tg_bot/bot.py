@@ -296,7 +296,6 @@ class TGBot:
         """
         Проверяет, есть ли пользователь в списке пользователей с доступом к ПУ TG.
         """
-        lang = m.from_user.language_code
         if m.chat.type != "private" or (self.attempts.get(m.from_user.id, 0) >= 5) or m.text is None:
             return
         if not self.cardinal.block_tg_login and \
@@ -310,11 +309,11 @@ class TGBot:
                 self.notification_settings[str(m.chat.id)] = self.__default_notification_settings.copy()
                 self.notification_settings[str(m.chat.id)][NotificationTypes.critical] = 1
                 utils.save_notification_settings(self.notification_settings)
-            text = _("access_granted", language=lang)
+            text = _("access_granted")
             logger.warning(_("log_access_granted", m.from_user.username, m.from_user.id))
         else:
             self.attempts[m.from_user.id] = self.attempts.get(m.from_user.id, 0) + 1
-            text = _("access_denied", m.from_user.username, language=lang)
+            text = _("access_denied", m.from_user.username)
             logger.warning(_("log_access_attempt", m.from_user.username, m.from_user.id))
         # Посторонним не показываем никаких кнопок и ссылок - бот приватный.
         self.bot.send_message(m.chat.id, text)
@@ -327,8 +326,7 @@ class TGBot:
                          c.message.chat.id))
         self.attempts[c.from_user.id] = self.attempts.get(c.from_user.id, 0) + 1
         if self.attempts[c.from_user.id] <= 5:
-            self.bot.answer_callback_query(c.id, _("access_denied_short", language=c.from_user.language_code),
-                                           show_alert=True)
+            self.bot.answer_callback_query(c.id, _("access_denied_short"), show_alert=True)
         return
 
     # Команды
@@ -1069,7 +1067,6 @@ class TGBot:
         #
         section = c.data.split(":")[1]
         sections = {
-            "lang": (_("desc_lang"), kb.language_settings, [self.cardinal]),
             "main": (_("desc_gs"), kb.main_settings, [self.cardinal]),
             "tg": (_("desc_ns", c.message.chat.id), kb.notifications_settings, [self.cardinal, c.message.chat.id]),
             "bl": (_("desc_bl"), kb.blacklist_settings, [self.cardinal]),
@@ -1123,18 +1120,6 @@ class TGBot:
     def empty_callback(self, c: CallbackQuery):
         """Заглушка для кнопок-заголовков, которые не должны ничего делать."""
         self.bot.answer_callback_query(c.id)
-
-    def switch_lang(self, c: CallbackQuery):
-        lang = c.data.split(":")[1]
-        Localizer(lang)
-        self.cardinal.MAIN_CFG["Other"]["language"] = lang
-        self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
-        if localizer.current_language != "ru":
-            self.bot.answer_callback_query(c.id, _("lang_switched_notice"), show_alert=True)
-        else:
-            self.bot.answer_callback_query(c.id)
-        c.data = f"{CBT.CATEGORY}:lang"
-        self.open_settings_section(c)
 
     def __register_handlers(self):
         """
@@ -1213,7 +1198,6 @@ class TGBot:
         self.cbq_handler(self.cancel_action, lambda c: c.data == CBT.CLEAR_STATE)
         self.cbq_handler(self.send_old_mode_help_text, lambda c: c.data == CBT.OLD_MOD_HELP)
         self.cbq_handler(self.empty_callback, lambda c: c.data == CBT.EMPTY)
-        self.cbq_handler(self.switch_lang, lambda c: c.data.startswith(f"{CBT.LANG}:"))
 
     def send_notification(self, text: str | None, keyboard: K | None = None,
                           notification_type: str = utils.NotificationTypes.other, photo: bytes | None = None,
@@ -1274,9 +1258,8 @@ class TGBot:
         """
         Устанавливает меню команд.
         """
-        for lang in (None, *localizer.languages.keys()):
-            commands = [BotCommand(f"/{i}", _(self.commands[i], language=lang)) for i in self.commands]
-            self.bot.set_my_commands(commands, language_code=lang)
+        commands = [BotCommand(f"/{name}", _(help_key)) for name, help_key in self.commands.items()]
+        self.bot.set_my_commands(commands)
 
     def edit_bot(self):
         """

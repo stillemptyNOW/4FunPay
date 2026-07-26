@@ -64,25 +64,6 @@ def power_off(instance_id: int, state: int) -> K:
         kb.add(B(_("gl_yep"), None, f"{CBT.SHUT_DOWN}:6:{instance_id}"))
     return kb
 
-
-def language_settings(c: Cardinal) -> K:
-    lang = c.MAIN_CFG["Other"]["language"]
-    langs = {
-        "uk": "🇺🇦", "en": "🇺🇸", "ru": "🇷🇺"
-    }
-
-    kb = K()
-    lang_buttons = []
-
-    for i in langs:
-        cb = f"{CBT.LANG}:{i}" if lang != i else CBT.EMPTY
-        text = langs[i] if lang != i else f"⋅ {langs[i]} ⋅"
-        lang_buttons.append(B(text, callback_data=cb))
-    kb.row(*lang_buttons)
-    kb.add(B(_("gl_back"), None, CBT.MAIN))
-    return kb
-
-
 def main_settings(c: Cardinal) -> K:
     """
     Генерирует клавиатуру основных переключателей (CBT.CATEGORY:main).
@@ -715,12 +696,12 @@ def support_links(language: None | str = None) -> K | None:
     """
     buttons = []
     if "{{" not in branding.REPO_URL:
-        buttons.append(B(_("lnk_repo", language=language), url=branding.REPO_URL))
+        buttons.append(B(_("lnk_repo"), url=branding.REPO_URL))
     if "{{" not in branding.SUPPORT_CHAT:
-        buttons.append(B(_("lnk_chat", language=language),
+        buttons.append(B(_("lnk_chat"),
                          url=f"https://t.me/{branding.SUPPORT_CHAT.lstrip('@')}"))
     if "{{" not in branding.OWNER_TG:
-        buttons.append(B(_("lnk_owner", language=language),
+        buttons.append(B(_("lnk_owner"),
                          url=f"https://t.me/{branding.OWNER_TG.lstrip('@')}"))
     if not buttons:
         return None
