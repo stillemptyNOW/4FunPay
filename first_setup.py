@@ -20,7 +20,7 @@ import telebot
 from colorama import Fore, Style
 
 import branding
-from Utils.cardinal_tools import build_proxy, check_proxy, hash_password, validate_proxy
+from Utils.cardinal_tools import hash_password
 from Utils.config_loader import load_main_config
 
 GOLDEN_KEY_LENGTH = 32
@@ -58,7 +58,6 @@ DEFAULT_CONFIG: dict[str, dict[str, str]] = {
         "token": "",
         "secretKeyHash": "",
         "blockLogin": "0",
-        "proxy": "",
     },
     "BlockList": {
         "blockDelivery": "0",
@@ -100,11 +99,6 @@ DEFAULT_CONFIG: dict[str, dict[str, str]] = {
         "star3ReplyText": "",
         "star4ReplyText": "",
         "star5ReplyText": "",
-    },
-    "Proxy": {
-        "enable": "0",
-        "proxy": "",
-        "check": "0",
     },
     "Other": {
         "watermark": "🤖",
@@ -200,64 +194,6 @@ def contains_cyrillic(text: str) -> bool:
     return any("А" <= char <= "я" or char in "Ёё" for char in text)
 
 
-def input_proxy(set_telebot_proxy: bool = False) -> str | None:
-    """
-    Запрашивает прокси и проверяет их работоспособность.
-
-    :param set_telebot_proxy: применить ли прокси к telebot сразу после проверки.
-
-    :return: строка прокси или None, если пользователь пропустил шаг.
-    """
-    while True:
-        proxy_input = _read(f"{Fore.MAGENTA}{Style.BRIGHT}└──> {Style.RESET_ALL}")
-
-        if not proxy_input:
-            if set_telebot_proxy:
-                telebot.apihelper.proxy = None
-            return None
-
-        try:
-            proxy = build_proxy(*validate_proxy(proxy_input))
-            if not check_proxy({"http": proxy, "https": proxy}):
-                _warn("Прокси не отвечают. Попробуй другие или нажми Enter, чтобы пропустить.")
-                continue
-            if set_telebot_proxy:
-                telebot.apihelper.proxy = {"http": proxy, "https": proxy}
-            return proxy
-        except Exception as exc:
-            _warn(f"Неверный формат прокси: {exc}")
-
-
-PROXY_PROMPT = ("Прокси в формате scheme://login:password@ip:port, login:password@ip:port "
-                "или ip:port. Не нужны - просто нажми Enter.")
-
-
-def setup_telegram_proxy() -> None:
-    """
-    Отдельный сценарий: сменить прокси для доступа к Telegram в готовом конфиге.
-
-    Вызывается из ``setup_telegram_proxy.py`` - нужен, когда бот уже настроен,
-    но Telegram недоступен напрямую с сервера.
-    """
-    config = load_main_config("configs/_main.cfg")
-    print(f"\n{Fore.MAGENTA}{Style.BRIGHT}┌── {Fore.CYAN}Прокси ДЛЯ ДОСТУПА К TELEGRAM. "
-          f"{PROXY_PROMPT}{Style.RESET_ALL}")
-    while True:
-        try:
-            proxy = input_proxy(set_telebot_proxy=True)
-            username = telebot.TeleBot(config["Telegram"]["token"]).get_me().username
-            _say(f"\nПодключение к Telegram работает: @{username}")
-            break
-        except Exception as exc:
-            _warn(f"Не удалось подключиться к Telegram: {exc}")
-
-    config.set("Telegram", "proxy", proxy or "")
-    _say("Сохраняю конфиг...")
-    with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-        config.write(f)
-    time.sleep(3)
-
-
 def _ask_golden_key(config: ConfigParser) -> None:
     """Запрашивает golden_key и записывает его в конфиг."""
     while True:
@@ -336,20 +272,10 @@ def first_setup() -> None:
     _ask_golden_key(config)
     _ask_user_agent(config)
 
-    print(f"\n{Fore.MAGENTA}{Style.BRIGHT}┌── {Fore.CYAN}Прокси ДЛЯ ДОСТУПА К TELEGRAM. "
-          f"{PROXY_PROMPT}{Style.RESET_ALL}")
-    if telegram_proxy := input_proxy(set_telebot_proxy=True):
-        config.set("Telegram", "proxy", telegram_proxy)
 
     _ask_telegram_token(config)
     _ask_password(config)
 
-    print(f"\n{Fore.MAGENTA}{Style.BRIGHT}┌── {Fore.CYAN}Прокси ДЛЯ ДОСТУПА К FUNPAY. "
-          f"{PROXY_PROMPT}{Style.RESET_ALL}")
-    if funpay_proxy := input_proxy():
-        config.set("Proxy", "proxy", funpay_proxy)
-        config.set("Proxy", "enable", "1")
-        config.set("Proxy", "check", "1")
 
     with open("configs/_main.cfg", "w", encoding="utf-8") as f:
         config.write(f)

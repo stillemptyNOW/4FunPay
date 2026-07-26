@@ -40,9 +40,9 @@ telebot.apihelper.ENABLE_MIDDLEWARE = True
 class TGBot:
     def __init__(self, cardinal: Cardinal):
         self.cardinal = cardinal
-        if cardinal.MAIN_CFG["Telegram"]["proxy"]:
-            telebot.apihelper.proxy = {"https": cardinal.MAIN_CFG["Telegram"]["proxy"],
-                                       "http": cardinal.MAIN_CFG["Telegram"]["proxy"]}
+        # Прокси для api.telegram.org - только из переменной окружения.
+        if telegram_proxy := secrets.proxy_for(secrets.TELEGRAM_PROXY_ENV):
+            telebot.apihelper.proxy = telegram_proxy
         self.bot = telebot.TeleBot(secrets.telegram_token(cardinal.MAIN_CFG), parse_mode="HTML",
                                    allow_sending_without_reply=True, num_threads=5)
 

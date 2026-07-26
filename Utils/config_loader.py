@@ -126,7 +126,6 @@ MAIN_CONFIG_SPEC: dict[str, dict[str, ParamSpec]] = {
         "enabled": _switch("0"),
         "token": _text(),
         "secretKeyHash": _text(),
-        "proxy": _text(),
         "blockLogin": _switch("0"),
     },
 
@@ -167,11 +166,6 @@ MAIN_CONFIG_SPEC: dict[str, dict[str, ParamSpec]] = {
         **{f"star{stars}ReplyText": _text() for stars in range(1, 6)},
     },
 
-    "Proxy": {
-        "enable": _switch("0"),
-        "proxy": _text(),
-        "check": _switch("0"),
-    },
 
     "Other": {
         "watermark": _text("🤖"),

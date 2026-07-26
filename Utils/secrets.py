@@ -31,6 +31,12 @@ GOLDEN_KEY_ENV = "FOURFP_GOLDEN_KEY"
 TELEGRAM_TOKEN_ENV = "FOURFP_TELEGRAM_TOKEN"
 """Переменная окружения с токеном Telegram-бота."""
 
+FUNPAY_PROXY_ENV = "FOURFP_FUNPAY_PROXY"
+"""Переменная окружения с прокси для доступа к funpay.com."""
+
+TELEGRAM_PROXY_ENV = "FOURFP_TELEGRAM_PROXY"
+"""Переменная окружения с прокси для доступа к api.telegram.org."""
+
 GOLDEN_KEY_LENGTH = 32
 """Ожидаемая длина golden_key."""
 
@@ -118,6 +124,29 @@ def telegram_token(config: ConfigParser) -> str:
     :return: значение токена.
     """
     return resolve(config, "Telegram", "token", TELEGRAM_TOKEN_ENV)
+
+
+def proxy_for(env_var: str) -> dict[str, str]:
+    """
+    Возвращает прокси в формате, который принимают requests и telebot.
+
+    Полноценного управления прокси в проекте нет намеренно: панель со списком
+    прокси, кэш пула и мастер ввода были убраны как лишние. Осталась одна точка
+    входа - переменная окружения. Она нужна на случай, когда IP сервера
+    заблокирован на funpay.com или недоступен api.telegram.org: тогда прокси
+    задаётся в systemd-юните или в .env и бот перезапускается, без правки кода.
+
+    Формат значения: ``scheme://[login:password@]host:port``,
+    например ``socks5://user:pass@1.2.3.4:1080``.
+
+    :param env_var: имя переменной окружения.
+
+    :return: словарь для параметра ``proxies``; пустой, если прокси не задан.
+    """
+    value = os.getenv(env_var, "").strip()
+    if not value:
+        return {}
+    return {"http": value, "https": value}
 
 
 def is_from_env(env_var: str) -> bool:

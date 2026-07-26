@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import bcrypt
-import requests
 
 from locales.localizer import Localizer
 
@@ -77,108 +76,6 @@ def load_blacklist() -> list[str]:
         except json.decoder.JSONDecodeError:
             return []
         return blacklist
-
-
-def check_proxy(proxy: dict) -> bool:
-    """
-    Проверяет работоспособность прокси.
-
-    :param proxy: словарь с данными прокси.
-
-    :return: True, если прокси работает, иначе - False.
-    """
-    logger.info(_("crd_checking_proxy"))
-    try:
-        response = requests.get("https://api.ipify.org/", proxies=proxy, timeout=10)
-    except:
-        logger.error(_("crd_proxy_err"))
-        logger.debug("TRACEBACK", exc_info=True)
-        return False
-    logger.info(_("crd_proxy_success", response.content.decode()))
-    return True
-
-
-def validate_proxy(proxy: str):
-    """
-    Проверяет прокси на соответствие формату IPv4 и выбрасывает исключение или возвращает логин, пароль, IP и порт.
-
-    :param proxy: прокси
-    :return: логин, пароль, IP и порт
-    """
-    if "://" in proxy:
-        scheme, rest = proxy.split("://", 1)
-    else:
-        scheme = "http"
-        rest = proxy
-
-    if "@" in rest:
-        login_password, ip_port = rest.split("@")
-        login, password = login_password.split(":")
-    else:
-        login, password = "", ""
-        ip_port = rest
-
-    ip, port = ip_port.split(":")
-
-    ip_parts = ip.split(".")
-    if len(ip_parts) != 4 or not all(part.isdigit() and 0 <= int(part) < 256 for part in ip_parts):
-        raise ValueError("Неправильный IP")
-
-    if not port.isdigit() or not 0 < int(port) <= 65535:
-        raise ValueError("Неправильный порт")
-
-    if scheme not in ("http", "https", "socks5", "socks5h"):
-        raise ValueError("Схема прокси должна быть http, https, socks5 или socks5h")
-
-    return scheme, login, password, ip, port
-
-def build_proxy(scheme: str | None, login: str, password: str, ip: str, port: str) -> str:
-    if not scheme:
-        scheme = "http"
-    if login and password:
-        return f"{scheme}://{login}:{password}@{ip}:{port}"
-    else:
-        return f"{scheme}://{ip}:{port}"
-
-
-def cache_proxy_dict(proxy_dict: dict[int, str]) -> None:
-    """
-    Кэширует список прокси.
-
-    :param proxy_dict: список прокси.
-    """
-    if not os.path.exists("storage/cache"):
-        os.makedirs("storage/cache")
-
-    with open("storage/cache/proxy_dict.json", "w", encoding="utf-8") as f:
-        f.write(json.dumps(proxy_dict, indent=4))
-
-
-def load_proxy_dict() -> dict[int, str]:
-    """
-    Загружает список прокси.
-
-    :return: список прокси.
-    """
-    if not os.path.exists("storage/cache/proxy_dict.json"):
-        return {}
-
-    with open("storage/cache/proxy_dict.json", "r", encoding="utf-8") as f:
-        proxy = f.read()
-
-        try:
-            proxy = json.loads(proxy)
-            proxy_dict = {}
-            for id_, proxy_str in proxy.items():
-                try:
-                    proxy_dict[int(id_)] = build_proxy(*validate_proxy(proxy_str))
-                except:
-                    logger.debug(f"Не удалось добавить {proxy_str}")
-                    logger.debug("TRACEBACK", exc_info=True)
-        except json.decoder.JSONDecodeError:
-            return {}
-        return proxy_dict
-
 
 def cache_disabled_plugins(disabled_plugins: list[str]) -> None:
     """

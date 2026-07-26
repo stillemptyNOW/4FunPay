@@ -32,7 +32,6 @@ mm_new_msg_view = "✉️ Appearance of new msg. notification"
 mm_plugins = "🧩 Plugins"
 mm_configs = "📁 Configs"
 mm_authorized_users = "👥 Authorized Users"
-mm_proxy = "🌐 Proxy"
 
 # Global switches
 gs_autoraise = "{} Auto-raise"
@@ -155,7 +154,6 @@ cfg_upload_ad = "⤴️ Upload auto-delivery config"
 tg_block_login = "{} Block logins by password"
 
 # Proxy
-prx_proxy_add = "➕ Add proxy"
 
 # Links
 lnk_chat = "💬 Support"
@@ -256,12 +254,6 @@ not_blacklisted = "❌ <code>{}</code> is not blacklisted."
 user_unbanned = "✅ <code>{}</code> is no longer blacklisted."
 blacklist_empty = "❌ Blacklist is empty."
 
-act_proxy = "Enter the proxy in the format <u>login:password@ip:port</u> or <u>ip:port</u>."
-proxy_already_exists = "❌ The proxy <code>{}</code> already exists."
-proxy_added = "✅ Proxy <u>{}</u> added successfully."
-proxy_format = "❌ Proxies must be in the format <u>login:password@ip:port</u> or <u>ip:port</u>."
-proxy_adding_error = "❌ There was an error while adding the proxy."
-proxy_undeletable = "❌ This proxy cannot be deleted as it is currently in use."
 
 act_edit_watermark = "Send the new watermark text. It is prepended to every message " \
                      "the bot sends to a buyer.\n\n" \
@@ -441,7 +433,6 @@ desc_pl = "Here you can get information about the plugins, as well as configure 
           "⚠️ <b><u>After activating / deactivating / adding / removing a plugin, you must restart the bot!</u></b>" \
           " (/restart)"
 desc_au = "Here you can configure authorization in the Telegram control panel."
-desc_proxy = "Here you can set up the proxy."
 
 # - Commands desc
 cmd_menu = "open settings"
@@ -573,9 +564,6 @@ ntfc_review_reply_text = "\n\n🗨️<b>Reply:</b> \n<code>{}</code>"
 
 # cardinal.py logs
 crd_proxy_detected = "Proxy detected."
-crd_checking_proxy = "Running proxy checks..."
-crd_proxy_err = "Failed to connect to the proxy. Make sure that the data is entered correctly."
-crd_proxy_success = "Proxy verified successfully! IP address: $YELLOW{}$RESET."
 crd_acc_get_timeout_err = "Failed to load account data: Timeout exceeded."
 crd_acc_get_unexpected_err = "An unexpected error occurred while retrieving account information."
 crd_try_again_in_n_secs = "The next attempt is in {} seconds(-s)..."
