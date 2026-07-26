@@ -114,15 +114,49 @@ DEFAULT_CONFIG: dict[str, dict[str, str]] = {
 }
 
 
+class SetupNotInteractiveError(RuntimeError):
+    """
+    Мастер запущен там, где некому отвечать на вопросы.
+
+    Возникает при запуске без конфига под systemd или в отцепленном
+    контейнере: ``input()`` сразу получает EOF. Без отдельной обработки
+    пользователь увидел бы в journalctl сырой EOFError вместо объяснения.
+    """
+
+
 def _say(text: str) -> None:
     """Печатает информационную строку мастера."""
     print(f"{Fore.CYAN}{Style.BRIGHT}{text}{Style.RESET_ALL}")
 
 
+def _read(prompt: str) -> str:
+    """
+    Читает строку со стандартного ввода.
+
+    :param prompt: приглашение ко вводу.
+
+    :return: введённое значение без окружающих пробелов.
+
+    :raises SetupNotInteractiveError: стандартный ввод закрыт.
+    """
+    try:
+        return input(prompt).strip()
+    except EOFError as exc:
+        raise SetupNotInteractiveError from exc
+
+
 def _ask(prompt: str) -> str:
-    """Задаёт вопрос и возвращает введённое значение без окружающих пробелов."""
+    """
+    Задаёт вопрос и возвращает введённое значение без окружающих пробелов.
+
+    :param prompt: текст вопроса.
+
+    :return: ответ пользователя.
+
+    :raises SetupNotInteractiveError: стандартный ввод закрыт.
+    """
     print(f"\n{Fore.MAGENTA}{Style.BRIGHT}┌── {Fore.CYAN}{prompt}{Style.RESET_ALL}")
-    return input(f"{Fore.MAGENTA}{Style.BRIGHT}└──> {Style.RESET_ALL}").strip()
+    return _read(f"{Fore.MAGENTA}{Style.BRIGHT}└──> {Style.RESET_ALL}")
 
 
 def _warn(text: str) -> None:
@@ -175,7 +209,7 @@ def input_proxy(set_telebot_proxy: bool = False) -> str | None:
     :return: строка прокси или None, если пользователь пропустил шаг.
     """
     while True:
-        proxy_input = input(f"{Fore.MAGENTA}{Style.BRIGHT}└──> {Style.RESET_ALL}").strip()
+        proxy_input = _read(f"{Fore.MAGENTA}{Style.BRIGHT}└──> {Style.RESET_ALL}")
 
         if not proxy_input:
             if set_telebot_proxy:

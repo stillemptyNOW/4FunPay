@@ -639,3 +639,16 @@ auth_expired = "🔑 <b>FunPay rejects the golden_key.</b>\n\n" \
                       "Until the key is updated, auto-delivery and auto-replies do not work. " \
                       "Reconnect attempts continue every {} sec."
 auth_restored = "✅ Connection to FunPay restored. Account: <code>{}</code>"
+confirm_password_request = "🔐 <b>Confirmation required</b>\n\n" \
+                          "Action: <b>{}</b>\n\n" \
+                          "Send the control panel password - the same one you signed in with.\n" \
+                          "The request is valid for {} sec."
+confirm_wrong_password = "❌ Wrong password. Attempts left: <b>{}</b>."
+confirm_too_many_attempts = "🚫 No attempts left, the request is cancelled. Start the action again."
+confirm_expired = "⌛ The confirmation has expired. Start the action again."
+confirm_nothing_pending = "🤷 Nothing to confirm."
+confirm_action_change_golden_key = "changing the golden_key"
+confirm_action_power_off = "shutting the bot down"
+confirm_action_restore_backup = "restoring from a backup"
+confirm_action_upload_plugin = "installing a plugin"
+confirm_action_change_authorized_users = "changing the access list"

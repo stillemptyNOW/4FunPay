@@ -640,3 +640,16 @@ auth_expired = "🔑 <b>FunPay не приймає golden_key.</b>\n\n" \
                       "Поки ключ не оновлено, автовидача та автовідповіді не працюють. " \
                       "Спроби підключення продовжуються кожні {} сек."
 auth_restored = "✅ Підключення до FunPay відновлено. Акаунт: <code>{}</code>"
+confirm_password_request = "🔐 <b>Потрібне підтвердження</b>\n\n" \
+                          "Дія: <b>{}</b>\n\n" \
+                          "Надішли пароль від панелі керування - той самий, яким ти входив.\n" \
+                          "Запит діє {} сек."
+confirm_wrong_password = "❌ Пароль неправильний. Залишилось спроб: <b>{}</b>."
+confirm_too_many_attempts = "🚫 Спроби вичерпано, запит скасовано. Почни дію спочатку."
+confirm_expired = "⌛ Термін підтвердження минув. Почни дію спочатку."
+confirm_nothing_pending = "🤷 Нема чого підтверджувати."
+confirm_action_change_golden_key = "зміна golden_key"
+confirm_action_power_off = "вимкнення бота"
+confirm_action_restore_backup = "відновлення з резервної копії"
+confirm_action_upload_plugin = "встановлення плагіна"
+confirm_action_change_authorized_users = "зміна списку доступу"

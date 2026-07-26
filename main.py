@@ -61,7 +61,7 @@ import Utils.cardinal_tools
 import Utils.config_loader as cfg_loader
 import Utils.exceptions as excs
 from cardinal import Cardinal
-from first_setup import first_setup
+from first_setup import first_setup, SetupNotInteractiveError
 from locales.localizer import Localizer
 from Utils import secrets
 from Utils.logger import LOGGER_CONFIG
@@ -124,7 +124,20 @@ print(f"{Fore.MAGENTA}{Style.BRIGHT} * Поддержка:    {Fore.BLUE}{brandi
 # --- Первичная настройка ---------------------------------------------------
 
 if not os.path.exists("configs/_main.cfg"):
-    first_setup()
+    try:
+        first_setup()
+    except SetupNotInteractiveError:
+        # Типичный случай: сервис включили до того, как прошли первичную настройку.
+        logger.error("Конфиг configs/_main.cfg отсутствует, а запустить мастер настройки "
+                     "не получается: программа работает без интерактивного ввода.")
+        logger.error("Останови сервис и пройди настройку вручную:")
+        logger.error(f"  sudo systemctl stop {branding.SERVICE_NAME}@$USER")
+        logger.error(f"  cd ~/{branding.SERVICE_NAME} && ~/pyvenv/bin/python main.py")
+        logger.error(f"  sudo systemctl start {branding.SERVICE_NAME}@$USER")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logger.info("Настройка прервана. Конфиг не сохранён.")
+        sys.exit(1)
     sys.exit()
 
 # --- PID-файл при запуске как systemd-сервис -------------------------------

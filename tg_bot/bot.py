@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from FunPayAPI import Account
 from tg_bot.utils import NotificationTypes
@@ -27,6 +27,7 @@ from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, 
     InputFile
 from tg_bot import utils, static_keyboards as skb, keyboards as kb, CBT
 from Utils import cardinal_tools, backup, secrets
+from Utils.confirmations import ConfirmationManager, CriticalAction, VerdictReason
 from locales.localizer import Localizer
 import branding
 
@@ -71,6 +72,12 @@ class TGBot:
         self.notification_settings = utils.load_notification_settings()  # настройки уведомлений.
         self.answer_templates = utils.load_answer_templates()  # заготовки ответов.
         self.authorized_users = utils.load_authorized_users()  # авторизированные пользователи.
+
+        # Критичные действия требуют повторного ввода пароля панели.
+        # Авторизация в ПУ одноразовая, поэтому доступ к разблокированному
+        # Telegram владельца иначе означал бы право сменить golden_key
+        # или выключить бота без единой проверки.
+        self.confirmations = ConfirmationManager()
 
         self.commands = {
             "menu": "cmd_menu",
@@ -338,16 +345,87 @@ class TGBot:
         self.bot.send_message(m.chat.id, utils.generate_profile_text(self.cardinal),
                               reply_markup=skb.REFRESH_BTN())
 
+    # Подтверждение критичных действий
+    def require_confirmation(self, m: Message, action: CriticalAction,
+                             on_confirmed: Callable[[Message], None]) -> None:
+        """
+        Запрашивает повторный ввод пароля панели перед критичным действием.
+
+        Действие выполняется только после успешной проверки. Запрос живёт
+        ограниченное время и сгорает после нескольких неверных вводов -
+        подробности в :mod:`Utils.confirmations`.
+
+        :param m: сообщение, которым запрошено действие.
+        :param action: что именно подтверждается.
+        :param on_confirmed: что выполнить после подтверждения.
+        """
+        pending = self.confirmations.require(action, m.from_user.id, m.chat.id,
+                                             payload={"callback": on_confirmed})
+        result = self.bot.send_message(
+            m.chat.id,
+            _("confirm_password_request", _(f"confirm_action_{action}"),
+              pending.seconds_left(self.confirmations.ttl)),
+            reply_markup=skb.CLEAR_STATE_BTN())
+        self.set_state(m.chat.id, result.id, m.from_user.id, CBT.CONFIRM_PASSWORD)
+
+    def confirm_password(self, m: Message) -> None:
+        """
+        Проверяет введённый пароль и выполняет отложенное действие.
+
+        :param m: сообщение с паролем.
+        """
+        self.clear_state(m.chat.id, m.from_user.id, True)
+        # Пароль не должен остаться в истории чата, как и golden_key.
+        try:
+            self.bot.delete_message(m.chat.id, m.id)
+        except Exception:
+            logger.debug("Не удалось удалить сообщение с паролем", exc_info=True)
+
+        verdict = self.confirmations.verify(
+            m.from_user.id, m.chat.id, m.text or "",
+            cardinal_tools.check_password,
+            self.cardinal.MAIN_CFG["Telegram"].get("secretKeyHash", ""))
+
+        if verdict.confirmed:
+            logger.warning(f"[IMPORTANT] Подтверждено критичное действие "
+                           f"$YELLOW{verdict.pending.action}$RESET пользователем "
+                           f"$MAGENTA@{m.from_user.username} (id: {m.from_user.id})$RESET.")
+            callback = verdict.pending.payload.get("callback")
+            if callable(callback):
+                callback(m)
+            return
+
+        if verdict.reason is VerdictReason.WRONG_PASSWORD:
+            logger.warning(f"Неверный пароль подтверждения от "
+                           f"$MAGENTA@{m.from_user.username} (id: {m.from_user.id})$RESET, "
+                           f"осталось попыток: {verdict.attempts_left}.")
+            self.bot.send_message(m.chat.id, _("confirm_wrong_password", verdict.attempts_left))
+            # Запрос ещё жив - возвращаем состояние ожидания пароля.
+            self.set_state(m.chat.id, m.id, m.from_user.id, CBT.CONFIRM_PASSWORD)
+        elif verdict.reason is VerdictReason.TOO_MANY_ATTEMPTS:
+            logger.warning(f"[IMPORTANT] Исчерпаны попытки подтверждения у "
+                           f"$MAGENTA@{m.from_user.username} (id: {m.from_user.id})$RESET.")
+            self.bot.send_message(m.chat.id, _("confirm_too_many_attempts"))
+        elif verdict.reason is VerdictReason.EXPIRED:
+            self.bot.send_message(m.chat.id, _("confirm_expired"))
+        else:
+            self.bot.send_message(m.chat.id, _("confirm_nothing_pending"))
+
     def act_change_cookie(self, m: Message):
         """
-        Активирует режим ввода golden_key.
+        Запрашивает подтверждение и включает режим ввода golden_key.
         """
         # Если ключ задан переменной окружения, запись в конфиг будет перекрыта
         # при следующем запуске - предупреждаем сразу, а не молча теряем правку.
         if secrets.is_from_env(secrets.GOLDEN_KEY_ENV):
             self.bot.send_message(m.chat.id, _("golden_key_from_env", secrets.GOLDEN_KEY_ENV))
             return
-        result = self.bot.send_message(m.chat.id, _("act_change_golden_key"), reply_markup=skb.CLEAR_STATE_BTN())
+        self.require_confirmation(m, CriticalAction.CHANGE_GOLDEN_KEY, self._start_cookie_input)
+
+    def _start_cookie_input(self, m: Message) -> None:
+        """Включает режим ввода golden_key после подтверждения паролем."""
+        result = self.bot.send_message(m.chat.id, _("act_change_golden_key"),
+                                       reply_markup=skb.CLEAR_STATE_BTN())
         self.set_state(m.chat.id, result.id, m.from_user.id, CBT.CHANGE_GOLDEN_KEY)
 
     def change_cookie(self, m: Message):
@@ -629,9 +707,14 @@ class TGBot:
 
     def ask_power_off(self, m: Message):
         """
-        Просит подтверждение на отключение бота.
+        Запрашивает пароль, затем показывает подтверждение отключения.
         """
-        self.bot.send_message(m.chat.id, _("power_off_0"), reply_markup=kb.power_off(self.cardinal.instance_id, 0))
+        self.require_confirmation(m, CriticalAction.POWER_OFF, self._show_power_off_prompt)
+
+    def _show_power_off_prompt(self, m: Message) -> None:
+        """Показывает клавиатуру подтверждения выключения после ввода пароля."""
+        self.bot.send_message(m.chat.id, _("power_off_0"),
+                              reply_markup=kb.power_off(self.cardinal.instance_id, 0))
 
     def cancel_power_off(self, c: CallbackQuery):
         """
@@ -1070,6 +1153,10 @@ class TGBot:
         self.msg_handler(self.act_change_cookie, commands=["change_cookie", "golden_key"])
         self.msg_handler(self.change_cookie, func=lambda m: self.check_state(m.chat.id, m.from_user.id,
                                                                              CBT.CHANGE_GOLDEN_KEY))
+        # Ввод пароля перед критичным действием. Регистрируется раньше прочих
+        # обработчиков состояний, чтобы пароль не перехватил другой сценарий.
+        self.msg_handler(self.confirm_password,
+                         func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.CONFIRM_PASSWORD))
         self.cbq_handler(self.update_profile, lambda c: c.data == CBT.UPDATE_PROFILE)
         self.msg_handler(self.act_manual_delivery_test, commands=["test_lot"])
         self.msg_handler(self.act_upload_image, commands=["upload_chat_img", "upload_offer_img"])
