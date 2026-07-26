@@ -13,6 +13,7 @@
 # Штатные плагины проекта - часть поставки, поэтому исключены из игнора явно.
 /plugins/*
 !/plugins/audit_log.py
+!/plugins/price_monitor.py
 !/plugins/sales_stats.py
 !/plugins/watchdog.py
 # Резервные копии (содержат configs/ целиком)
