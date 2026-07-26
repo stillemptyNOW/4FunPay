@@ -1,15 +1,63 @@
 """
-В данном модуле написаны функции для валидации конфигов.
+Загрузка и валидация конфигов.
+
+Схема основного конфига описана декларативно в :data:`MAIN_CONFIG_SPEC`:
+для каждого параметра заданы допустимые значения и значение по умолчанию.
+
+Отсутствующий параметр не является ошибкой, если у него есть значение
+по умолчанию: он дописывается в файл при загрузке. Это заменило цепочку
+из 15 частных миграций, унаследованную от исходного проекта, и делает
+конфиг совместимым вперёд - добавление новой настройки в код не ломает
+уже существующие конфиги.
 """
-import configparser
-from configparser import ConfigParser, SectionProxy
+from __future__ import annotations
+
 import codecs
+import configparser
 import os
+from configparser import ConfigParser, SectionProxy
+from dataclasses import dataclass
 
 from Utils.exceptions import (ParamNotFoundError, EmptyValueError, ValueNotValidError, SectionNotFoundError,
                               ConfigParseError, ProductsFileNotFoundError, NoProductVarError,
                               SubCommandAlreadyExists, DuplicateSectionErrorWrapper)
-from Utils.cardinal_tools import hash_password, build_proxy
+
+BOOL_VALUES = ["0", "1"]
+"""Допустимые значения переключателя."""
+
+SITE_LOCALES = ["ru", "en", "uk"]
+"""
+Языки, на которых можно запрашивать страницы funpay.com.
+
+Не путать с языком интерфейса бота: этот параметр влияет на разметку,
+которую придётся разбирать, поэтому список задан самим сайтом.
+"""
+
+
+@dataclass(frozen=True)
+class ParamSpec:
+    """
+    Описание одного параметра конфига.
+
+    :param valid: список допустимых значений; None - любая строка.
+    :param allow_empty: допустимо ли пустое значение.
+    :param default: значение, которым параметр дописывается, если его нет
+        в файле. None - параметр обязателен, его отсутствие это ошибка.
+    """
+
+    valid: list[str] | None = None
+    allow_empty: bool = False
+    default: str | None = None
+
+
+def _switch(default: str) -> ParamSpec:
+    """Сокращение для параметра-переключателя 0/1."""
+    return ParamSpec(valid=BOOL_VALUES, default=default)
+
+
+def _text(default: str = "", allow_empty: bool = True) -> ParamSpec:
+    """Сокращение для текстового параметра."""
+    return ParamSpec(allow_empty=allow_empty, default=default)
 
 
 def check_param(param_name: str, section: SectionProxy, valid_values: list[str | None] | None = None,
@@ -57,210 +105,162 @@ def create_config_obj(config_path: str) -> ConfigParser:
     return config
 
 
-def load_main_config(config_path: str):
+MAIN_CONFIG_SPEC: dict[str, dict[str, ParamSpec]] = {
+    "FunPay": {
+        # Пустое значение допустимо: секрет может быть задан переменной
+        # окружения. Наличие проверяется отдельно в Utils.secrets.
+        "golden_key": _text(),
+        "user_agent": _text(),
+        "autoRaise": _switch("0"),
+        "autoResponse": _switch("0"),
+        "autoDelivery": _switch("0"),
+        "multiDelivery": _switch("0"),
+        "autoRestore": _switch("0"),
+        "autoDisable": _switch("0"),
+        "oldMsgGetMode": _switch("0"),
+        "keepSentMessagesUnread": _switch("0"),
+        "locale": ParamSpec(valid=SITE_LOCALES, default="ru"),
+    },
+
+    "Telegram": {
+        "enabled": _switch("0"),
+        "token": _text(),
+        "secretKeyHash": _text(),
+        "proxy": _text(),
+        "blockLogin": _switch("0"),
+    },
+
+    "BlockList": {
+        "blockDelivery": _switch("0"),
+        "blockResponse": _switch("0"),
+        "blockNewMessageNotification": _switch("0"),
+        "blockNewOrderNotification": _switch("0"),
+        "blockCommandNotification": _switch("0"),
+    },
+
+    "NewMessageView": {
+        "includeMyMessages": _switch("1"),
+        "includeFPMessages": _switch("1"),
+        "includeBotMessages": _switch("0"),
+        "notifyOnlyMyMessages": _switch("0"),
+        "notifyOnlyFPMessages": _switch("0"),
+        "notifyOnlyBotMessages": _switch("0"),
+        "showImageName": _switch("1"),
+    },
+
+    "Greetings": {
+        "ignoreSystemMessages": _switch("0"),
+        "onlyNewChats": _switch("0"),
+        "sendGreetings": _switch("0"),
+        "greetingsText": _text("Привет, $chat_name! Чем могу помочь?", allow_empty=False),
+        "greetingsCooldown": _text("2", allow_empty=False),
+    },
+
+    "OrderConfirm": {
+        "watermark": _switch("1"),
+        "sendReply": _switch("0"),
+        "replyText": _text("$username, спасибо за подтверждение заказа $order_id!", allow_empty=False),
+    },
+
+    "ReviewReply": {
+        **{f"star{stars}Reply": _switch("0") for stars in range(1, 6)},
+        **{f"star{stars}ReplyText": _text() for stars in range(1, 6)},
+    },
+
+    "Proxy": {
+        "enable": _switch("0"),
+        "proxy": _text(),
+        "check": _switch("0"),
+    },
+
+    "Other": {
+        "watermark": _text("🤖"),
+        "requestsDelay": ParamSpec(valid=[str(i) for i in range(1, 101)], default="4"),
+        "language": ParamSpec(valid=SITE_LOCALES, default="ru"),
+    },
+}
+"""Схема основного конфига: допустимые значения и значения по умолчанию."""
+
+# Водяной знак подставляется в сообщения покупателям. Если конфиг перенесён
+# из исходного проекта, в нём остался чужой бренд - вычищаем при загрузке.
+FOREIGN_WATERMARK_MARKERS = ("cardinal", "𝑪𝒂𝒓𝒅𝒊𝒏𝒂𝒍", "𝓒𝓪𝓻𝓭𝓲𝓷𝓪𝓵", "ᴄᴀʀᴅɪɴᴀʟ")
+
+
+def _fill_defaults(config: ConfigParser) -> bool:
     """
-    Парсит и проверяет на правильность основной конфиг.
+    Дописывает отсутствующие параметры значениями по умолчанию.
+
+    :param config: объект конфига.
+
+    :return: True, если конфиг был изменён и его нужно сохранить.
+    """
+    changed = False
+    for section_name, params in MAIN_CONFIG_SPEC.items():
+        if not config.has_section(section_name):
+            continue
+        for param_name, spec in params.items():
+            if param_name in config[section_name] or spec.default is None:
+                continue
+            config.set(section_name, param_name, spec.default)
+            changed = True
+    return changed
+
+
+def _clean_foreign_watermark(config: ConfigParser) -> bool:
+    """
+    Убирает бренд исходного проекта из водяного знака.
+
+    :param config: объект конфига.
+
+    :return: True, если водяной знак был заменён.
+    """
+    if not config.has_option("Other", "watermark"):
+        return False
+    current = config["Other"]["watermark"].lower()
+    if not any(marker in current for marker in FOREIGN_WATERMARK_MARKERS):
+        return False
+    config.set("Other", "watermark", "🤖")
+    return True
+
+
+def load_main_config(config_path: str) -> ConfigParser:
+    """
+    Загружает и проверяет основной конфиг.
+
+    Отсутствующие параметры, у которых есть значение по умолчанию,
+    дописываются в файл. Файл перезаписывается один раз, а не после
+    каждой правки, как это было в исходном проекте.
 
     :param config_path: путь до основного конфига.
 
-    :return: спарсеный основной конфиг.
+    :return: разобранный конфиг.
+
+    :raises ConfigParseError: секция отсутствует либо значение недопустимо.
     """
     config = create_config_obj(config_path)
-    values = {
-        "FunPay": {
-            # Пустое значение допустимо: секрет может быть задан переменной
-            # окружения. Наличие проверяется отдельно в Utils.secrets.
-            "golden_key": "any+empty",
-            "user_agent": "any+empty",
-            "autoRaise": ["0", "1"],
-            "autoResponse": ["0", "1"],
-            "autoDelivery": ["0", "1"],
-            "multiDelivery": ["0", "1"],
-            "autoRestore": ["0", "1"],
-            "autoDisable": ["0", "1"],
-            "oldMsgGetMode": ["0", "1"],
-            "keepSentMessagesUnread": ["0", "1"],
-            "locale": ["ru", "en", "uk"]
-        },
 
-        "Telegram": {
-            "enabled": ["0", "1"],
-            "token": "any+empty",
-            "secretKeyHash": "any+empty",
-            "proxy": "any+empty",
-            "blockLogin": ["0", "1"]
-        },
-
-        "BlockList": {
-            "blockDelivery": ["0", "1"],
-            "blockResponse": ["0", "1"],
-            "blockNewMessageNotification": ["0", "1"],
-            "blockNewOrderNotification": ["0", "1"],
-            "blockCommandNotification": ["0", "1"]
-        },
-
-        "NewMessageView": {
-            "includeMyMessages": ["0", "1"],
-            "includeFPMessages": ["0", "1"],
-            "includeBotMessages": ["0", "1"],
-            "notifyOnlyMyMessages": ["0", "1"],
-            "notifyOnlyFPMessages": ["0", "1"],
-            "notifyOnlyBotMessages": ["0", "1"],
-            "showImageName": ["0", "1"]
-        },
-
-        "Greetings": {
-            "ignoreSystemMessages": ["0", "1"],
-            "onlyNewChats": ["0", "1"],
-            "sendGreetings": ["0", "1"],
-            "greetingsText": "any",
-            "greetingsCooldown": "any"
-        },
-
-        "OrderConfirm": {
-            "watermark": ["0", "1"],
-            "sendReply": ["0", "1"],
-            "replyText": "any"
-        },
-
-        "ReviewReply": {
-            "star1Reply": ["0", "1"],
-            "star2Reply": ["0", "1"],
-            "star3Reply": ["0", "1"],
-            "star4Reply": ["0", "1"],
-            "star5Reply": ["0", "1"],
-            "star1ReplyText": "any+empty",
-            "star2ReplyText": "any+empty",
-            "star3ReplyText": "any+empty",
-            "star4ReplyText": "any+empty",
-            "star5ReplyText": "any+empty",
-        },
-
-        "Proxy": {
-            "enable": ["0", "1"],
-            "proxy": "any+empty",
-            "check": ["0", "1"]
-        },
-
-        "Other": {
-            "watermark": "any+empty",
-            "requestsDelay": [str(i) for i in range(1, 101)],
-            "language": ["ru", "en", "uk"]
-        }
-    }
-
-    for section_name in values:
+    for section_name in MAIN_CONFIG_SPEC:
         if section_name not in config.sections():
             raise ConfigParseError(config_path, section_name, SectionNotFoundError())
 
-        # UPDATE
-        if section_name == "Greetings" and "cacheInitChats" in config[section_name]:
-            config.remove_option(section_name, "cacheInitChats")
-            with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                config.write(f)
-        # END OF UPDATE
+    changed = _fill_defaults(config)
+    changed |= _clean_foreign_watermark(config)
+    if changed:
+        with open(config_path, "w", encoding="utf-8") as file:
+            config.write(file)
 
-        for param_name in values[section_name]:
-
-            # UPDATE
-            if section_name == "FunPay" and param_name == "oldMsgGetMode" and param_name not in config[section_name]:
-                config.set("FunPay", "oldMsgGetMode", "0")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Greetings" and param_name == "ignoreSystemMessages" and param_name not in config[
-                section_name]:
-                config.set("Greetings", "ignoreSystemMessages", "0")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Other" and param_name == "language" and param_name not in config[section_name]:
-                config.set("Other", "language", "ru")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Other" and param_name == "language" and config[section_name][param_name] == "eng":
-                config.set("Other", "language", "en")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Greetings" and param_name == "greetingsCooldown" and param_name not in config[
-                section_name]:
-                config.set("Greetings", "greetingsCooldown", "2")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "OrderConfirm" and param_name == "watermark" and param_name not in config[
-                section_name]:
-                config.set("OrderConfirm", "watermark", "1")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "FunPay" and param_name == "keepSentMessagesUnread" and \
-                    param_name not in config[section_name]:
-                config.set("FunPay", "keepSentMessagesUnread", "0")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "NewMessageView" and param_name == "showImageName" and \
-                    param_name not in config[section_name]:
-                config.set("NewMessageView", "showImageName", "1")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Telegram" and param_name == "blockLogin" and \
-                    param_name not in config[section_name]:
-                config.set("Telegram", "blockLogin", "0")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Telegram" and param_name == "secretKeyHash" and \
-                    param_name not in config[section_name]:
-                config.set(section_name, "secretKeyHash", hash_password(config[section_name]["secretKey"]))
-                config.remove_option(section_name, "secretKey")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "FunPay" and param_name == "locale" and \
-                    param_name not in config[section_name]:
-                config.set(section_name, "locale", "ru")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            # Миграция с исходного проекта: убираем его бренд из водяного знака,
-            # который подставляется в сообщения покупателям.
-            elif section_name == "Other" and param_name == "watermark" and \
-                    param_name in config[section_name] and \
-                    any(marker in config[section_name][param_name].lower()
-                        for marker in ("cardinal", "𝑪𝒂𝒓𝒅𝒊𝒏𝒂𝒍", "𝓒𝓪𝓻𝓭𝓲𝓷𝓪𝓵", "ᴄᴀʀᴅɪɴᴀʟ")):
-                config.set(section_name, param_name, "🤖")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Greetings" and param_name == "onlyNewChats" and param_name not in config[
-                section_name]:
-                config.set("Greetings", "onlyNewChats", "0")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Proxy" and param_name == "proxy" and param_name not in config[section_name]:
-                if config["Proxy"]["ip"] and config["Proxy"]["port"]:
-                    config.set("Proxy", "proxy", "")
-                else:
-                    config.set("Proxy", "proxy", build_proxy(None, config["Proxy"]["login"],
-                                                             config["Proxy"]["password"], config["Proxy"]["ip"],
-                                                             config["Proxy"]["port"]))
-                config.remove_option(section_name, "login")
-                config.remove_option(section_name, "password")
-                config.remove_option(section_name, "ip")
-                config.remove_option(section_name, "port")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-            elif section_name == "Telegram" and param_name == "proxy" and param_name not in config[section_name]:
-                config.set("Telegram", "proxy", "")
-                with open("configs/_main.cfg", "w", encoding="utf-8") as f:
-                    config.write(f)
-
-            # END OF UPDATE
-
+    for section_name, params in MAIN_CONFIG_SPEC.items():
+        for param_name, spec in params.items():
+            valid_values = spec.valid
+            if spec.allow_empty:
+                valid_values = [None] if valid_values is None else [*valid_values, None]
             try:
-                if values[section_name][param_name] == "any":
-                    check_param(param_name, config[section_name])
-                elif values[section_name][param_name] == "any+empty":
-                    check_param(param_name, config[section_name], valid_values=[None])
-                else:
-                    check_param(param_name, config[section_name], valid_values=values[section_name][param_name])
-            except (ParamNotFoundError, EmptyValueError, ValueNotValidError) as e:
-                raise ConfigParseError(config_path, section_name, e)
+                check_param(param_name, config[section_name], valid_values=valid_values)
+            except (ParamNotFoundError, EmptyValueError, ValueNotValidError) as exc:
+                raise ConfigParseError(config_path, section_name, exc)
 
     return config
+
 
 
 def load_auto_response_config(config_path: str):
