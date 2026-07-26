@@ -77,24 +77,7 @@ def update_threshold_on_initial_chat(c: Cardinal, e: InitialChatEvent):
         c.greeting_chat_id_threshold = e.chat.id
 
 
-# NEW MESSAGE / LAST CHAT MESSAGE CHANGED
-def old_log_msg_handler(c: Cardinal, e: LastChatMessageChangedEvent):
-    """
-    Логирует полученное сообщение.
-    """
-    if not c.old_mode_enabled:
-        return
-    text, chat_name, chat_id = str(e.chat), e.chat.name, e.chat.id
-    username = c.account.username if not e.chat.unread else e.chat.name
-
-    logger.info(_("log_new_msg", chat_name, chat_id))
-    for index, line in enumerate(text.split("\n")):
-        if not index:
-            logger.info(f"$MAGENTA└───> $YELLOW{username}: $CYAN{line}")
-        else:
-            logger.info(f"      $CYAN{line}")
-
-
+# NEW MESSAGE
 def log_msg_handler(c: Cardinal, e: NewMessageEvent):
     global MSG_LOG_LAST_STACK_ID
     if e.stack.id() == MSG_LOG_LAST_STACK_ID:
@@ -115,18 +98,13 @@ def log_msg_handler(c: Cardinal, e: NewMessageEvent):
     MSG_LOG_LAST_STACK_ID = e.stack.id()
 
 
-def update_threshold_on_last_message_change(c: Cardinal, e: LastChatMessageChangedEvent | NewMessageEvent):
+def update_threshold_on_last_message_change(c: Cardinal, e: NewMessageEvent):
     """
     Обновляет пороговое значение для определения новых чатов.
     """
     # Должно выполняться после greetings_handler для корректной обработки
     # c.greeting_threshold_chat_ids (чтобы не спамило приветствиями)
-    if not c.old_mode_enabled:
-        if isinstance(e, LastChatMessageChangedEvent):
-            return
-        chat_id = e.message.chat_id
-    else:
-        chat_id = e.chat.id
+    chat_id = e.message.chat_id
     if e.runner_tag != c.last_greeting_chat_id_threshold_change_tag:
         c.greeting_chat_id_threshold = max([c.greeting_chat_id_threshold, *c.greeting_threshold_chat_ids])
         c.greeting_threshold_chat_ids = set()
@@ -134,20 +112,15 @@ def update_threshold_on_last_message_change(c: Cardinal, e: LastChatMessageChang
     c.greeting_threshold_chat_ids.add(chat_id)
 
 
-def greetings_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChangedEvent):
+def greetings_handler(c: Cardinal, e: NewMessageEvent):
     """
     Отправляет приветственное сообщение.
     """
     if not c.MAIN_CFG["Greetings"].getboolean("sendGreetings"):
         return
-    if not c.old_mode_enabled:
-        if isinstance(e, LastChatMessageChangedEvent):
-            return
-        obj = e.message
-        chat_id, chat_name, mtype, its_me, badge = obj.chat_id, obj.chat_name, obj.type, obj.author_id == c.account.id, obj.badge
-    else:
-        obj = e.chat
-        chat_id, chat_name, mtype, its_me, badge = obj.id, obj.name, obj.last_message_type, not obj.unread, None
+    obj = e.message
+    chat_id, chat_name, mtype = obj.chat_id, obj.chat_name, obj.type
+    its_me, badge = obj.author_id == c.account.id, obj.badge
     is_old_chat = (chat_id <= c.greeting_chat_id_threshold or chat_id in c.greeting_threshold_chat_ids)
 
     if any([c.MAIN_CFG["Greetings"].getboolean("onlyNewChats") and is_old_chat,
@@ -162,19 +135,14 @@ def greetings_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChangedEv
     Thread(target=c.send_message, args=(chat_id, text, chat_name), daemon=True).start()
 
 
-def add_old_user_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChangedEvent):
+def add_old_user_handler(c: Cardinal, e: NewMessageEvent):
     """
     Добавляет пользователя в список написавших.
     """
     if not c.MAIN_CFG["Greetings"].getboolean("sendGreetings") or c.MAIN_CFG["Greetings"].getboolean("onlyNewChats"):
         return
 
-    if not c.old_mode_enabled:
-        if isinstance(e, LastChatMessageChangedEvent):
-            return
-        chat_id, mtype = e.message.chat_id, e.message.type
-    else:
-        chat_id, mtype = e.chat.id, e.chat.last_message_type
+    chat_id, mtype = e.message.chat_id, e.message.type
 
     if mtype == MessageTypes.DEAR_VENDORS:
         return
@@ -183,20 +151,14 @@ def add_old_user_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChange
     cardinal_tools.cache_old_users(c.old_users)
 
 
-def send_response_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChangedEvent):
+def send_response_handler(c: Cardinal, e: NewMessageEvent):
     """
     Проверяет, является ли сообщение командой, и если да, отправляет ответ на данную команду.
     """
     if not c.autoresponse_enabled:
         return
-    if not c.old_mode_enabled:
-        if isinstance(e, LastChatMessageChangedEvent):
-            return
-        obj, mtext = e.message, str(e.message)
-        chat_id, chat_name, username = e.message.chat_id, e.message.chat_name, e.message.author
-    else:
-        obj, mtext = e.chat, str(e.chat)
-        chat_id, chat_name, username = obj.id, obj.name, obj.name
+    obj, mtext = e.message, str(e.message)
+    chat_id, chat_name, username = obj.chat_id, obj.chat_name, obj.author
 
     mtext = mtext.replace("\n", "")
     if any([c.bl_response_enabled and username in c.blacklist, (command := mtext.strip().lower()) not in c.AR_CFG]):
@@ -207,25 +169,6 @@ def send_response_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChang
     logger.info(_("log_new_cmd", command, chat_name, chat_id))
     response_text = cardinal_tools.format_msg_text(c.AR_CFG[command]["response"], obj)
     Thread(target=c.send_message, args=(chat_id, response_text, chat_name), daemon=True).start()
-
-
-def old_send_new_msg_notification_handler(c: Cardinal, e: LastChatMessageChangedEvent):
-    if any([not c.old_mode_enabled, not c.telegram, not e.chat.unread,
-            c.bl_msg_notification_enabled and e.chat.name in c.blacklist,
-            e.chat.last_message_type is not MessageTypes.NON_SYSTEM, str(e.chat).strip().lower() in c.AR_CFG.sections(),
-            str(e.chat).startswith("!автовыдача")]):
-        return
-    user = e.chat.name
-    if user in c.blacklist:
-        user = f"🚷 {user}"
-    elif e.chat.last_by_bot:
-        user = f"🐦 {user}"
-    else:
-        user = f"👤 {user}"
-    text = f"<i><b>{user}: </b></i><code>{utils.escape(str(e.chat))}</code>"
-    kb = keyboards.reply(e.chat.id, e.chat.name, extend=True)
-    Thread(target=c.telegram.send_notification, args=(text, kb, utils.NotificationTypes.new_message),
-           daemon=True).start()
 
 
 def send_new_msg_notification_handler(c: Cardinal, e: NewMessageEvent) -> None:
@@ -326,18 +269,10 @@ def send_review_notification(c: Cardinal, order: Order, chat_id: int, reply_text
            daemon=True).start()
 
 
-def process_review_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChangedEvent):
-    if not c.old_mode_enabled:
-        if isinstance(e, LastChatMessageChangedEvent):
-            return
-        obj = e.message
-        message_type, its_me = obj.type, obj.i_am_buyer
-        message_text, chat_id = str(obj), obj.chat_id
-
-    else:
-        obj = e.chat
-        message_type, its_me = obj.last_message_type, f" {c.account.username} " in str(obj)
-        message_text, chat_id = str(obj), obj.id
+def process_review_handler(c: Cardinal, e: NewMessageEvent):
+    obj = e.message
+    message_type, its_me = obj.type, obj.i_am_buyer
+    message_text, chat_id = str(obj), obj.chat_id
 
     if message_type not in [types.MessageTypes.NEW_FEEDBACK, types.MessageTypes.FEEDBACK_CHANGED] or its_me:
         return
@@ -394,20 +329,14 @@ def process_review_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChan
     Thread(target=send_reply, daemon=True).start()
 
 
-def send_command_notification_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChangedEvent):
+def send_command_notification_handler(c: Cardinal, e: NewMessageEvent):
     """
     Отправляет уведомление о введенной команде в телеграм.
     """
     if not c.telegram:
         return
-    if not c.old_mode_enabled:
-        if isinstance(e, LastChatMessageChangedEvent):
-            return
-        obj, message_text = e.message, str(e.message)
-        chat_id, chat_name, username = e.message.chat_id, e.message.chat_name, e.message.author
-    else:
-        obj, message_text = e.chat, str(e.chat)
-        chat_id, chat_name, username = obj.id, obj.name, obj.name if obj.unread else c.account.username
+    obj, message_text = e.message, str(e.message)
+    chat_id, chat_name, username = obj.chat_id, obj.chat_name, obj.author
 
     if c.bl_cmd_notification_enabled and username in c.blacklist:
         return
@@ -425,16 +354,11 @@ def send_command_notification_handler(c: Cardinal, e: NewMessageEvent | LastChat
                                                       utils.NotificationTypes.command), daemon=True).start()
 
 
-def test_auto_delivery_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChangedEvent):
+def test_auto_delivery_handler(c: Cardinal, e: NewMessageEvent):
     """
     Выполняет тест автовыдачи.
     """
-    if not c.old_mode_enabled:
-        if isinstance(e, LastChatMessageChangedEvent):
-            return
-        obj, message_text, chat_name, chat_id = e.message, str(e.message), e.message.chat_name, e.message.chat_id
-    else:
-        obj, message_text, chat_name, chat_id = e.chat, str(e.chat), e.chat.name, e.chat.id
+    obj, message_text, chat_name, chat_id = e.message, str(e.message), e.message.chat_name, e.message.chat_id
 
     if not message_text.startswith("!автовыдача"):
         return
@@ -884,16 +808,6 @@ def send_bot_started_notification_handler(c: Cardinal, *args):
 
 
 BIND_TO_INIT_MESSAGE = [save_init_chats_handler, update_threshold_on_initial_chat]
-
-BIND_TO_LAST_CHAT_MESSAGE_CHANGED = [old_log_msg_handler,
-                                     greetings_handler,
-                                     update_threshold_on_last_message_change,
-                                     add_old_user_handler,
-                                     send_response_handler,
-                                     process_review_handler,
-                                     old_send_new_msg_notification_handler,
-                                     send_command_notification_handler,
-                                     test_auto_delivery_handler]
 
 BIND_TO_NEW_MESSAGE = [log_msg_handler,
                        greetings_handler,

@@ -49,8 +49,6 @@ DEFAULT_CONFIG: dict[str, dict[str, str]] = {
         "multiDelivery": "0",
         "autoRestore": "0",
         "autoDisable": "0",
-        "oldMsgGetMode": "0",
-        "keepSentMessagesUnread": "0",
         "locale": "ru",
     },
     "Telegram": {

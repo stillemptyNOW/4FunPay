@@ -117,8 +117,6 @@ MAIN_CONFIG_SPEC: dict[str, dict[str, ParamSpec]] = {
         "multiDelivery": _switch("0"),
         "autoRestore": _switch("0"),
         "autoDisable": _switch("0"),
-        "oldMsgGetMode": _switch("0"),
-        "keepSentMessagesUnread": _switch("0"),
         "locale": ParamSpec(valid=SITE_LOCALES, default="ru"),
     },
 

@@ -601,8 +601,7 @@ class TGBot:
             self.bot.send_message(m.chat.id, _("logfile_sending"))
             try:
                 with open("logs/log.log", "r", encoding="utf-8") as f:
-                    self.bot.send_document(m.chat.id, f,
-                                           caption=f'{_("gs_old_msg_mode").replace("{} ", "") if self.cardinal.old_mode_enabled else ""}')
+                    self.bot.send_document(m.chat.id, f)
                     f.seek(0)
                     file_content = f.read()
                     if "TRACEBACK" in file_content:
@@ -1025,11 +1024,8 @@ class TGBot:
         """
         split = c.data.split(":")
         section, option = split[1], split[2]
-        if section == "FunPay" and option == "oldMsgGetMode":
-            self.cardinal.switch_msg_get_mode()
-        else:
-            self.cardinal.MAIN_CFG[section][option] = str(int(not int(self.cardinal.MAIN_CFG[section][option])))
-            self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
+        self.cardinal.MAIN_CFG[section][option] = str(int(not int(self.cardinal.MAIN_CFG[section][option])))
+        self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
 
         sections = {
             "FunPay": kb.main_settings,
@@ -1113,9 +1109,6 @@ class TGBot:
                                   reply_markup=keyboard)
         self.bot.answer_callback_query(c.id)
 
-    def send_old_mode_help_text(self, c: CallbackQuery):
-        self.bot.answer_callback_query(c.id)
-        self.bot.send_message(c.message.chat.id, _("old_mode_help"))
 
     def empty_callback(self, c: CallbackQuery):
         """Заглушка для кнопок-заголовков, которые не должны ничего делать."""
@@ -1196,7 +1189,6 @@ class TGBot:
         self.cbq_handler(self.power_off, lambda c: c.data.startswith(f"{CBT.SHUT_DOWN}:"))
         self.cbq_handler(self.cancel_power_off, lambda c: c.data == CBT.CANCEL_SHUTTING_DOWN)
         self.cbq_handler(self.cancel_action, lambda c: c.data == CBT.CLEAR_STATE)
-        self.cbq_handler(self.send_old_mode_help_text, lambda c: c.data == CBT.OLD_MOD_HELP)
         self.cbq_handler(self.empty_callback, lambda c: c.data == CBT.EMPTY)
 
     def send_notification(self, text: str | None, keyboard: K | None = None,

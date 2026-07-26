@@ -513,19 +513,17 @@ class Cardinal(object):
             while current_attempts:
                 try:
                     if isinstance(entity, str):
+                        # add_to_ignore_list: собственные сообщения не должны
+                        # возвращаться как новые события и вызывать автоответ.
                         msg = self.account.send_message(chat_id, entity, chat_name,
                                                         interlocutor_id,
-                                                        None, not self.old_mode_enabled,
-                                                        self.old_mode_enabled,
-                                                        self.keep_sent_messages_unread and self.old_mode_enabled)
+                                                        add_to_ignore_list=True)
                         result.append(msg)
                         logger.info(_("crd_msg_sent", chat_id))
                     elif isinstance(entity, int):
                         msg = self.account.send_image(chat_id, entity, chat_name,
                                                       interlocutor_id,
-                                                      not self.old_mode_enabled,
-                                                      self.old_mode_enabled,
-                                                      self.keep_sent_messages_unread and self.old_mode_enabled)
+                                                      add_to_ignore_list=True)
                         result.append(msg)
                         logger.info(_("crd_msg_sent", chat_id))
                     elif isinstance(entity, float):
@@ -717,7 +715,7 @@ class Cardinal(object):
             Thread(target=self.telegram.run, daemon=True).start()
 
         self.__init_account()
-        self.runner = FunPayAPI.Runner(self.account, self.old_mode_enabled)
+        self.runner = FunPayAPI.Runner(self.account)
         self.__update_profile()
         self.run_handlers(self.post_init_handlers, (self,))
         return self
@@ -759,18 +757,6 @@ class Cardinal(object):
         """
         result = self.__update_profile(infinite_polling=False, attempts=3, update_main_profile=False)
         return result
-
-    def switch_msg_get_mode(self):
-        self.MAIN_CFG["FunPay"]["oldMsgGetMode"] = str(int(not self.old_mode_enabled))
-        self.save_config(self.MAIN_CFG, "configs/_main.cfg")
-        if not self.runner:
-            return
-        if not self.old_mode_enabled:
-            self.runner.last_messages_ids = {k: v[0] for k, v in self.runner.runner_last_messages.items()}
-        self.runner.make_msg_requests = False if self.old_mode_enabled else True
-        if self.old_mode_enabled:
-            self.runner.last_messages_ids = {}
-            self.runner.by_bot_ids = {}
 
     @staticmethod
     def save_config(config: configparser.ConfigParser, file_path: str) -> None:
@@ -987,14 +973,6 @@ class Cardinal(object):
     @property
     def autodisable_enabled(self) -> bool:
         return self.MAIN_CFG["FunPay"].getboolean("autoDisable")
-
-    @property
-    def old_mode_enabled(self) -> bool:
-        return self.MAIN_CFG["FunPay"].getboolean("oldMsgGetMode")
-
-    @property
-    def keep_sent_messages_unread(self) -> bool:
-        return self.MAIN_CFG["FunPay"].getboolean("keepSentMessagesUnread")
 
     @property
     def show_image_name(self) -> bool:
