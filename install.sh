@@ -23,7 +23,7 @@ set -euo pipefail
 readonly SERVICE_NAME="4funpay"
 readonly APP_DIR="${HOME}/${SERVICE_NAME}"
 readonly VENV_DIR="${HOME}/pyvenv"
-readonly REPO_URL="{{REPO_URL}}"
+readonly REPO_URL="https://github.com/stillemptyNOW/4FunPay.git"
 readonly MIN_PY_MINOR=11
 
 # --- Оформление вывода ------------------------------------------------------

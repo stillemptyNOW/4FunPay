@@ -36,7 +36,7 @@ OWNER_TG: Final[str] = "@{{OWNER_TG}}"
 SUPPORT_CHAT: Final[str] = "@{{SUPPORT_CHAT}}"
 """Telegram-чат поддержки."""
 
-REPO_URL: Final[str] = "{{REPO_URL}}"
+REPO_URL: Final[str] = "https://github.com/stillemptyNOW/4FunPay"
 """Адрес git-репозитория проекта."""
 
 # --- Технические имена -----------------------------------------------------
