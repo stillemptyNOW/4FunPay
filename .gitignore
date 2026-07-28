@@ -16,6 +16,7 @@
 !/plugins/price_monitor.py
 !/plugins/profit.py
 !/plugins/scam_guard.py
+!/plugins/unconfirmed_orders.py
 !/plugins/sales_stats.py
 !/plugins/watchdog.py
 # Резервные копии (содержат configs/ целиком)
