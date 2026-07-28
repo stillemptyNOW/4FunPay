@@ -43,6 +43,8 @@ from telebot.types import InlineKeyboardMarkup as Keyboard
 from telebot.types import Message
 
 from FunPayAPI.common.enums import OrderStatuses
+from Utils import llm
+from Utils.dispute_check import ChatLine, Decision, OrderCase, classify, split
 
 if TYPE_CHECKING:
     from cardinal import Cardinal
@@ -86,6 +88,14 @@ class Settings:
     last_check: float = 0.0
     """Время последней проверки."""
 
+    use_ai: bool = False
+    """
+    Разбирать ли переписки моделью.
+
+    Выключено по умолчанию: требует настроенного ключа, и переписки покупателей
+    уходят на сторонний сервер. Включать должен человек, понимающий это.
+    """
+
 
 def load_settings() -> Settings:
     """
@@ -102,6 +112,7 @@ def load_settings() -> Settings:
             min_age_hours=int(data.get("min_age_hours", DEFAULT_MIN_AGE_HOURS)),
             interval_hours=int(data.get("interval_hours", DEFAULT_INTERVAL_HOURS)),
             last_check=float(data.get("last_check", 0.0)),
+            use_ai=bool(data.get("use_ai", False)),
         )
     except (OSError, ValueError, TypeError):
         logger.debug("Настройки повреждены, беру значения по умолчанию", exc_info=True)
@@ -121,6 +132,7 @@ def save_settings(settings: Settings) -> None:
                 "min_age_hours": settings.min_age_hours,
                 "interval_hours": settings.interval_hours,
                 "last_check": settings.last_check,
+                "use_ai": settings.use_ai,
             }, file)
     except OSError:
         logger.debug("Не удалось сохранить настройки", exc_info=True)
@@ -203,6 +215,77 @@ def build_ticket_text(orders: list[OrderShortcut]) -> str:
     return "\n".join(lines)
 
 
+def collect_cases(cardinal: Cardinal, orders: list[OrderShortcut],
+                  now: datetime | None = None) -> list[OrderCase]:
+    """
+    Догружает переписки по заказам и готовит их к разбору моделью.
+
+    Истории берутся одним запросом на всю пачку через ``get_chats_histories``,
+    а не по запросу на заказ: у активного магазина зависших заказов бывает
+    несколько десятков, и поштучные запросы упёрлись бы в 429.
+
+    :param cardinal: экземпляр ядра.
+    :param orders: зависшие заказы.
+    :param now: текущее время, для тестов.
+
+    :return: заказы вместе с перепиской.
+    """
+    moment = now or datetime.now()
+    chats_data = {order.chat_id: order.buyer_username for order in orders if order.chat_id}
+
+    histories: dict[int | str, list] = {}
+    if chats_data:
+        try:
+            histories = cardinal.account.get_chats_histories(chats_data)
+        except Exception:
+            logger.warning(f"[{NAME}] не удалось получить истории чатов")
+            logger.debug("TRACEBACK", exc_info=True)
+
+    account_id = cardinal.account.id
+    cases = []
+    for order in orders:
+        messages = histories.get(order.chat_id, [])
+        lines = []
+        for message in messages:
+            text = str(message) if message.text is None else message.text
+            if not text:
+                continue
+            lines.append(ChatLine(
+                author=message.author or "",
+                text=text,
+                is_seller=message.author_id == account_id,
+            ))
+        cases.append(OrderCase(
+            order_id=order.id,
+            buyer=order.buyer_username,
+            lot=order.description or "",
+            age_hours=int((moment - order.date).total_seconds() // 3600),
+            lines=lines,
+        ))
+    return cases
+
+
+def build_ai_ticket_text(confirm_ids: list[str], dispute_ids: list[str]) -> str:
+    """
+    Собирает текст заявки с двумя списками, как требует форма поддержки.
+
+    :param confirm_ids: заказы, где покупатель забыл подтвердить.
+    :param dispute_ids: заказы, где ситуация неоднозначная.
+
+    :return: текст заявки.
+    """
+    lines = [TICKET_HEADER, ""]
+    for number, order_id in enumerate(confirm_ids, 1):
+        lines.append(f"{number} - #{order_id}")
+
+    if dispute_ids:
+        lines += ["", "Заказы, по которым ситуация неоднозначная "
+                      "(прошу не подтверждать, разбираюсь отдельно):", ""]
+        for number, order_id in enumerate(dispute_ids, 1):
+            lines.append(f"{number} - #{order_id}")
+    return "\n".join(lines)
+
+
 def _age_text(order: OrderShortcut, now: datetime | None = None) -> str:
     """
     Возвращает возраст заказа человекочитаемо.
@@ -252,6 +335,54 @@ def build_report(orders: list[OrderShortcut], now: datetime | None = None) -> tu
     return "\n".join(lines), ticket
 
 
+def build_ai_report(orders: list[OrderShortcut], decisions: list[Decision],
+                    now: datetime | None = None) -> tuple[str, str]:
+    """
+    Готовит отчёт с разбором переписок и текст заявки с двумя списками.
+
+    :param orders: зависшие заказы.
+    :param decisions: решения по ним.
+    :param now: текущее время, для тестов.
+
+    :return: кортеж ``(текст сообщения, текст заявки)``.
+    """
+    confirm, dispute = split(decisions)
+    by_id = {order.id: order for order in orders}
+    ticket = build_ai_ticket_text([d.order_id for d in confirm],
+                                  [d.order_id for d in dispute])
+
+    lines = [f"🤖 <b>Разбор переписок: {len(decisions)} заказов</b>", ""]
+
+    if confirm:
+        lines.append(f"✅ <b>Забыли подтвердить ({len(confirm)})</b> — в первый список:")
+        for decision in confirm:
+            order = by_id.get(decision.order_id)
+            suffix = f" · {order.price:g} {order.currency or ''}" if order else ""
+            lines.append(f"  <code>#{decision.order_id}</code>{suffix}\n"
+                         f"     <i>{decision.reason}</i>")
+        lines.append("")
+
+    if dispute:
+        lines.append(f"⚠️ <b>Спорные ({len(dispute)})</b> — во второй список:")
+        for decision in dispute:
+            order = by_id.get(decision.order_id)
+            suffix = f" · {order.buyer_username}" if order else ""
+            lines.append(f"  <code>#{decision.order_id}</code>{suffix}\n"
+                         f"     <i>{decision.reason}</i>")
+        lines.append("")
+
+    lines += [
+        "📋 <b>Текст заявки</b> (нажми, чтобы скопировать):",
+        f"<code>{ticket}</code>",
+        "",
+        "⚠️ <b>Разбор сделала модель — проверь первый список глазами.</b>",
+        "Она настроена перестраховываться: при любом сомнении заказ уходит "
+        "в спорные. Но ответственность за заявку на тебе, а ошибка в первом "
+        "списке отклоняет её целиком.",
+    ]
+    return "\n".join(lines), ticket
+
+
 def _notify(cardinal: Cardinal, text: str) -> None:
     """
     Отправляет отчёт в Telegram.
@@ -293,15 +424,45 @@ def run_check(cardinal: Cardinal, notify_when_empty: bool = False) -> int:
                 f"из них старше {settings.min_age_hours}ч: {len(stale)}")
 
     if not stale:
-        if notify_when_empty and cardinal.telegram:
-            cardinal.telegram.bot.send_message(
-                list(cardinal.telegram.notification_settings)[0] if cardinal.telegram.notification_settings else 0,
-                f"✅ Заказов без подтверждения старше {settings.min_age_hours}ч нет.")
         return 0
 
-    report, _ticket = build_report(stale)
+    report, _ticket = analyze(cardinal, stale, settings)
     _notify(cardinal, report)
     return len(stale)
+
+
+def analyze(cardinal: Cardinal, stale: list[OrderShortcut],
+            settings: Settings) -> tuple[str, str]:
+    """
+    Готовит отчёт по зависшим заказам, при необходимости разобрав переписки.
+
+    Если разбор моделью выключен или недоступен, возвращается обычный отчёт
+    одним списком: отсутствие ИИ не должно лишать владельца самой сводки.
+
+    :param cardinal: экземпляр ядра.
+    :param stale: зависшие заказы.
+    :param settings: настройки плагина.
+
+    :return: кортеж ``(текст сообщения, текст заявки)``.
+    """
+    if not settings.use_ai:
+        return build_report(stale)
+
+    if not llm.load_config().is_ready:
+        logger.warning(f"[{NAME}] разбор включён, но клиент модели не настроен")
+        report, ticket = build_report(stale)
+        return ("⚠️ Разбор переписок включён, но модель не настроена "
+                "(<code>/ai_key</code>, <code>/ai_test</code>).\n\n" + report), ticket
+
+    try:
+        cases = collect_cases(cardinal, stale)
+        decisions = classify(cases)
+        return build_ai_report(stale, decisions)
+    except Exception:
+        logger.warning(f"[{NAME}] разбор не удался, отдаю обычный список")
+        logger.debug("TRACEBACK", exc_info=True)
+        report, ticket = build_report(stale)
+        return ("⚠️ Не удалось разобрать переписки, список без разбора.\n\n" + report), ticket
 
 
 def _check_loop(cardinal: Cardinal) -> None:
@@ -345,9 +506,10 @@ def _register_telegram(cardinal: Cardinal) -> None:
 
     def check_now(message: Message) -> None:
         settings = load_settings()
+        note = " и разбираю переписки" if settings.use_ai else ""
         telegram.bot.send_message(
             message.chat.id,
-            f"🔍 Смотрю раздел продаж (заказы старше {settings.min_age_hours}ч)...")
+            f"🔍 Смотрю раздел продаж (заказы старше {settings.min_age_hours}ч){note}...")
 
         def worker() -> None:
             try:
@@ -359,7 +521,7 @@ def _register_telegram(cardinal: Cardinal) -> None:
                         f"✅ Всего ожидают подтверждения: <b>{len(orders)}</b>\n"
                         f"Из них старше {settings.min_age_hours}ч: <b>нет</b>")
                     return
-                report, _ticket = build_report(stale)
+                report, _ticket = analyze(cardinal, stale, settings)
                 keyboard = Keyboard().add(
                     Button("📨 Открыть форму поддержки", url=SUPPORT_FORM_URL))
                 telegram.bot.send_message(message.chat.id, report, reply_markup=keyboard)
@@ -367,6 +529,114 @@ def _register_telegram(cardinal: Cardinal) -> None:
                 logger.debug("Ошибка проверки по команде", exc_info=True)
                 telegram.bot.send_message(
                     message.chat.id, "❌ Не удалось получить список продаж. Смотри /logs")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def toggle_ai(message: Message) -> None:
+        settings = load_settings()
+        settings.use_ai = not settings.use_ai
+        save_settings(settings)
+        if not settings.use_ai:
+            telegram.bot.send_message(message.chat.id, "🤖 Разбор переписок выключен.")
+            return
+        ready = llm.load_config().is_ready
+        telegram.bot.send_message(
+            message.chat.id,
+            "🤖 <b>Разбор переписок включён.</b>\n\n"
+            "Перед составлением заявки бот отправит переписки по зависшим заказам "
+            "модели и разложит заказы на два списка.\n\n"
+            "⚠️ Переписки с покупателями при этом уходят на сторонний сервер "
+            "модели. Учитывай это.\n\n"
+            + ("✅ Клиент модели настроен." if ready else
+               "❌ Клиент не настроен: задай ключ командой <code>/ai_key</code> "
+               "и проверь связь через <code>/ai_test</code>."))
+
+    def set_ai_key(message: Message) -> None:
+        parts = (message.text or "").split(maxsplit=1)
+        # Сообщение с ключом удаляем сразу, как и в случае с golden_key.
+        try:
+            telegram.bot.delete_message(message.chat.id, message.id)
+        except Exception:
+            logger.debug("Не удалось удалить сообщение с ключом", exc_info=True)
+
+        if len(parts) < 2 or not parts[1].strip():
+            telegram.bot.send_message(
+                message.chat.id, "Формат: <code>/ai_key sk_live_...</code>")
+            return
+
+        config = llm.load_config()
+        config.api_key = parts[1].strip()
+        llm.save_config(config)
+        telegram.bot.send_message(
+            message.chat.id,
+            f"✅ Ключ сохранён: <code>{llm.mask_key(config.api_key)}</code>\n"
+            f"Файл: <code>{llm.SETTINGS_FILE}</code> (права 600, в git не попадает).\n\n"
+            f"Проверь связь: <code>/ai_test</code>")
+
+    def set_ai_url(message: Message) -> None:
+        parts = (message.text or "").split(maxsplit=1)
+        if len(parts) < 2:
+            telegram.bot.send_message(
+                message.chat.id,
+                f"Формат: <code>/ai_url http://host:port/v1</code>\n"
+                f"Сейчас: <code>{llm.load_config().base_url}</code>")
+            return
+        config = llm.load_config()
+        config.base_url = parts[1].strip().rstrip("/")
+        llm.save_config(config)
+        telegram.bot.send_message(message.chat.id, f"✅ URL: <code>{config.base_url}</code>")
+
+    def set_ai_model(message: Message) -> None:
+        parts = (message.text or "").split(maxsplit=1)
+        if len(parts) < 2:
+            telegram.bot.send_message(
+                message.chat.id,
+                f"Формат: <code>/ai_model gpt-4o-mini</code>\n"
+                f"Сейчас: <code>{llm.load_config().model}</code>\n"
+                f"Список доступных покажет <code>/ai_test</code>")
+            return
+        config = llm.load_config()
+        config.model = parts[1].strip()
+        llm.save_config(config)
+        telegram.bot.send_message(message.chat.id, f"✅ Модель: <code>{config.model}</code>")
+
+    def test_ai(message: Message) -> None:
+        config = llm.load_config()
+        telegram.bot.send_message(
+            message.chat.id,
+            f"🤖 <b>Настройки модели</b>\n\n"
+            f"URL: <code>{config.base_url}</code>\n"
+            f"Модель: <code>{config.model}</code>\n"
+            f"Ключ: <code>{llm.mask_key(config.resolved_key())}</code>\n\n"
+            f"Проверяю связь...")
+
+        def worker() -> None:
+            client = llm.LLMClient(config)
+            try:
+                models = client.list_models()
+            except llm.LLMError as exc:
+                telegram.bot.send_message(
+                    message.chat.id, f"❌ Список моделей недоступен:\n<code>{exc}</code>")
+                return
+
+            shown = "\n".join(f"  • <code>{name}</code>" for name in models[:25])
+            more = f"\n<i>...и ещё {len(models) - 25}</i>" if len(models) > 25 else ""
+            telegram.bot.send_message(
+                message.chat.id, f"✅ Доступно моделей: <b>{len(models)}</b>\n{shown}{more}")
+
+            try:
+                answer = client.complete(
+                    "Отвечай одним словом.",
+                    "Ответь словом: работает", max_tokens=20)
+                telegram.bot.send_message(
+                    message.chat.id,
+                    f"✅ Модель <code>{config.model}</code> отвечает:\n"
+                    f"<code>{answer.strip()[:200]}</code>")
+            except llm.LLMError as exc:
+                telegram.bot.send_message(
+                    message.chat.id,
+                    f"❌ Модель <code>{config.model}</code> не отвечает:\n<code>{exc}</code>\n\n"
+                    f"Выбери другую из списка выше: <code>/ai_model ИМЯ</code>")
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -403,9 +673,19 @@ def _register_telegram(cardinal: Cardinal) -> None:
     telegram.msg_handler(check_now, commands=["unconfirmed"])
     telegram.msg_handler(set_age, commands=["unconfirmed_age"])
     telegram.msg_handler(set_interval, commands=["unconfirmed_every"])
+    telegram.msg_handler(toggle_ai, commands=["ai_check"])
+    telegram.msg_handler(set_ai_key, commands=["ai_key"])
+    telegram.msg_handler(set_ai_url, commands=["ai_url"])
+    telegram.msg_handler(set_ai_model, commands=["ai_model"])
+    telegram.msg_handler(test_ai, commands=["ai_test"])
 
     cardinal.add_telegram_commands(UUID, [
         ("unconfirmed", "заказы без подтверждения", True),
+        ("ai_check", "вкл/выкл разбор переписок моделью", True),
+        ("ai_test", "проверить связь с моделью", False),
+        ("ai_key", "задать ключ API модели", False),
+        ("ai_url", "задать URL API модели", False),
+        ("ai_model", "выбрать модель", False),
         ("unconfirmed_age", "возраст заказа для списка, часов", False),
         ("unconfirmed_every", "период автопроверки, часов", False),
     ])
